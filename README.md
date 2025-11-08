@@ -12,14 +12,17 @@
 - 🔍 **Ticker çıkarma** — akıllı filtreleme ve validasyon
 - 📊 **Stokastik RSI** sinyal tespiti (günlük)
 - 📱 **Telegram bildirimleri** — anında AL sinyali
-- ⏱️ **5 günlük watchlist** yönetimi (otomatik temizlik)
+- ⏱️ **Grace period** — sinyal verilen semboller 5 gün tekrar eklenemez
+- 🧹 **Otomatik temizlik** — 30 gün+ eski sinyal kayıtları silinir
+- 🖱️ **Pencere odaklama** — macOS PyAutoGUI ile TradingView'a otomatik tıklama
+- 🚀 **Startup agent** — Mac açıldığında otomatik kontrol (hafta içi, 16 saat+)
 - 🔄 **Otomatik retry** mekanizması (API ve Telegram)
 - ⚡ **Paralel tarama** (opsiyonel, hızlı)
 - 📝 **Yapısal loglama** — dosya + konsol
 - 🧪 **Dry-run modu** — test için
 - 🎯 **Progress bar** — görsel ilerleme takibi
 - ⚙️ **Pydantic validasyon** — güvenli config
-- 🌐 **Environment değişken desteği**
+- 🌐 **yfinance desteği** — ücretsiz, limitsiz veri
 
 ---
 
@@ -95,6 +98,26 @@ python -m src.main list
 #### 🔄 Run — Sürekli mod (capture + periyodik scan)
 ```bash
 python -m src.main run --interval 3600
+```
+
+#### ➕ Add — Manuel sembol ekle
+```bash
+python -m src.main add AAPL MSFT TSLA
+```
+
+#### ➖ Remove — Sembol kaldır
+```bash
+python -m src.main remove AAPL
+```
+
+#### 🧹 Clear — Tüm listeyi temizle
+```bash
+python -m src.main clear
+```
+
+#### 🔍 Debug — Sembol analizi (K/D değerleri)
+```bash
+python -m src.main debug AAPL
 ```
 
 ---
@@ -314,6 +337,56 @@ pytest --cov=src --cov-report=html
 # Belirli test
 pytest tests/test_indicators.py -v
 ```
+
+---
+
+## 🚀 Deployment (DigitalOcean)
+
+### VM Kurulumu
+
+```bash
+# 1. Ubuntu 22.04 droplet oluştur ($4/mo Basic)
+# 2. SSH key ile bağlan
+ssh -i ~/.ssh/key root@YOUR_IP
+
+# 3. Proje'yi klonla
+cd /root
+git clone https://github.com/KULLANICI_ADI/telegram-screener.git
+cd telegram-screener
+
+# 4. Python ve dependencies kur
+apt update && apt install -y python3-pip python3-venv
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+# 5. Config ayarla (api_provider: yfinance kullan)
+nano config.yaml
+
+# 6. Systemd service kur
+sudo systemctl enable /root/telegram-screener/telegram-screener.service
+sudo systemctl start telegram-screener
+sudo systemctl status telegram-screener
+```
+
+### macOS Otomasyonu
+
+```bash
+# LaunchAgent'lar zaten kurulu - kontrol et:
+launchctl list | grep watchlist
+
+# Manuel watchlist güncelleme:
+cd '/Users/KULLANICI_ADI/Desktop/Telegram Proje'
+./auto_update_watchlist.sh
+
+# Startup agent test:
+./startup_update_watchlist.sh
+```
+
+**Otomatik Çalışma:**
+- 🕐 **Zamanlanmış**: 10:00, 18:00, 22:00, 00:00 (Pazartesi-Cuma)
+- 🚀 **Startup**: Mac açıldığında (hafta içi, 16+ saat güncelleme yoksa)
+- ☁️ **VM**: Saatte 1 scan (7/24)
 
 ---
 

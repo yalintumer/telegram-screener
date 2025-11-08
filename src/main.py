@@ -108,6 +108,11 @@ def _scan_symbol(symbol: str, cfg: Config) -> tuple[str, bool, str | None]:
 def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parallel: bool = False):
     """Scan watchlist symbols for buy signals"""
     try:
+        # Clean up old signal history records (30+ days)
+        removed = watchlist.cleanup_old_signals()
+        if removed > 0:
+            logger.info("signal_history.cleanup", removed_count=removed)
+        
         symbols = watchlist.all_symbols()
         
         if not symbols:

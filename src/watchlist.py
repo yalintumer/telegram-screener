@@ -5,6 +5,7 @@ from datetime import date, timedelta
 PATH = Path("watchlist.json")
 SIGNAL_HISTORY_PATH = Path("signal_history.json")
 GRACE_PERIOD_DAYS = 5  # Sinyal verdikten sonra tekrar listeye eklenebilmesi için gerekli gün sayısı
+HISTORY_RETENTION_DAYS = 30  # Sinyal geçmişini ne kadar süre tutacağız
 
 
 def _load() -> dict:
@@ -112,3 +113,29 @@ def can_send_signal(symbol: str) -> bool:
     """Check if symbol is in watchlist (always returns True if in list since we remove after signal)"""
     w = _load()
     return symbol in w  # Basit kontrol: listede varsa sinyal gönder
+
+
+def cleanup_old_signals(retention_days: int = HISTORY_RETENTION_DAYS) -> int:
+    """
+    Remove old signal records from history.
+    Returns count of removed records.
+    """
+    history = _load_signal_history()
+    if not history:
+        return 0
+    
+    today = date.today()
+    removed_count = 0
+    
+    for symbol in list(history.keys()):
+        last_signal = date.fromisoformat(history[symbol]["last_signal"])
+        days_since = (today - last_signal).days
+        
+        if days_since >= retention_days:
+            del history[symbol]
+            removed_count += 1
+    
+    if removed_count > 0:
+        _save_signal_history(history)
+    
+    return removed_count
