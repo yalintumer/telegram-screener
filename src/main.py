@@ -148,15 +148,15 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                                 if not dry_run:
                                     try:
                                         tg.send(msg)
-                                        watchlist.mark_signal_sent(symbol)  # Mark after successful send
-                                        pbar.set_postfix_str(f"✅ {symbol} signal sent")
+                                        watchlist.mark_signal_sent(symbol)  # Remove from watchlist after signal sent
+                                        pbar.set_postfix_str(f"✅ {symbol} signal sent & removed from watchlist")
                                     except Exception as e:
                                         logger.error("telegram.send_failed", symbol=symbol, error=str(e))
                                         pbar.set_postfix_str(f"❌ {symbol} telegram failed")
                                 else:
                                     print(f"\n[DRY RUN] {msg}")
                             else:
-                                pbar.set_postfix_str(f"🔇 {symbol} grace period (signal sent recently)")
+                                pbar.set_postfix_str(f"⏭️ {symbol} already processed")
                         
                         pbar.update(1)
         else:
@@ -179,15 +179,15 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                             if not dry_run:
                                 try:
                                     tg.send(msg)
-                                    watchlist.mark_signal_sent(symbol)  # Mark after successful send
-                                    pbar.set_postfix_str(f"✅ {symbol} signal sent")
+                                    watchlist.mark_signal_sent(symbol)  # Remove from watchlist after signal sent
+                                    pbar.set_postfix_str(f"✅ {symbol} signal sent & removed from watchlist")
                                 except Exception as e:
                                     logger.error("telegram.send_failed", symbol=symbol, error=str(e))
                                     pbar.set_postfix_str(f"❌ {symbol} telegram failed")
                             else:
                                 print(f"\n[DRY RUN] {msg}")
                         else:
-                            pbar.set_postfix_str(f"🔇 {symbol} grace period (signal sent recently)")
+                            pbar.set_postfix_str(f"⏭️ {symbol} already processed")
                     
                     # Rate limit delay (skip for last item)
                     if i < len(symbols):

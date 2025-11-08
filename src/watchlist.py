@@ -46,24 +46,24 @@ def all_symbols() -> list[str]:
 
 
 def mark_signal_sent(symbol: str):
-    """Mark that a signal was sent for this symbol today"""
+    """Mark that a signal was sent for this symbol and REMOVE from watchlist"""
     w = _load()
     if symbol in w:
-        w[symbol]["last_signal"] = date.today().isoformat()
+        del w[symbol]  # Sinyal gönderildikten sonra listeden kaldır
         _save(w)
 
 
-def can_send_signal(symbol: str) -> bool:
-    """Check if we can send a signal for this symbol (grace period check)"""
+def remove_symbol(symbol: str) -> bool:
+    """Remove a symbol from watchlist. Returns True if removed."""
     w = _load()
-    if symbol not in w:
-        return False
-    
-    last_signal = w[symbol].get("last_signal")
-    if not last_signal:
-        return True  # Hiç sinyal gönderilmemiş
-    
-    last_date = date.fromisoformat(last_signal)
-    days_since = (date.today() - last_date).days
-    
-    return days_since >= GRACE_PERIOD_DAYS
+    if symbol in w:
+        del w[symbol]
+        _save(w)
+        return True
+    return False
+
+
+def can_send_signal(symbol: str) -> bool:
+    """Check if symbol is in watchlist (always returns True if in list since we remove after signal)"""
+    w = _load()
+    return symbol in w  # Basit kontrol: listede varsa sinyal gönder
