@@ -1,0 +1,24 @@
+# Production config for Oracle Cloud
+# Bu dosyayı sunucuda config.yaml olarak kullanın
+
+telegram:
+  bot_token: "7735605186:AAHNv0iGkp_3UGfsPkkdefTjsi8Amf2LN1g"
+  chat_id: "6155401829"
+
+api:
+  provider: "yfinance"  # FREE & UNLIMITED!
+  token: ""  # yfinance için token gerekmez
+  rate_limit_per_minute: 5
+
+data:
+  max_watch_days: 5
+
+screen:
+  # Cloud'da ekran görüntüsü çekilemez, bu ayarlar kullanılmayacak
+  region: [0, 0, 100, 100]
+  app_name: null
+
+tesseract:
+  config_str: "--psm 6"
+
+log_level: "INFO"

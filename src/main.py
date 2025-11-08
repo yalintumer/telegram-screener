@@ -1,0 +1,347 @@
+import argparse
+import time
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
+from .config import Config
+from .capture import capture
+from .ocr import extract_tickers, configure_tesseract
+from . import watchlist
+from .telegram_client import TelegramClient
+from .indicators import stochastic_rsi, stoch_rsi_buy
+from .logger import logger
+from .exceptions import TVScreenerError, DataSourceError
+
+# Import the correct data source based on config
+def get_data_source(provider: str):
+    """Get the appropriate data source function"""
+    if provider == "yfinance":
+        from .data_source_yfinance import daily_ohlc
+        return daily_ohlc
+    else:
+        from .data_source import daily_ohlc
+        return daily_ohlc
+
+
+def cmd_capture(cfg: Config, dry_run: bool = False):
+    """Capture screenshot, extract tickers, update watchlist"""
+    try:
+        logger.info("cmd.capture.start", dry_run=dry_run)
+        
+        # Configure tesseract if custom path provided
+        if cfg.tesseract.path:
+            configure_tesseract(cfg.tesseract.path, cfg.tesseract.lang)
+        
+        print("📸 Taking screenshot...")
+        img = capture(cfg.screen.region, app_name=cfg.screen.app_name)
+        
+        print("🔍 Extracting tickers with OCR...")
+        tickers = extract_tickers(img, cfg.tesseract.config_str)
+        
+        # Cleanup screenshot
+        try:
+            os.remove(img)
+            logger.debug("screenshot.removed", path=img)
+        except Exception as e:
+            logger.warning("screenshot.remove_failed", error=str(e))
+        
+        if dry_run:
+            print(f"\n[DRY RUN] Found {len(tickers)} ticker(s): {', '.join(tickers)}")
+            logger.info("cmd.capture.dry_run", tickers=tickers)
+            return
+        
+        print(f"\n📋 Found {len(tickers)} ticker(s): {', '.join(tickers)}")
+        
+        added = watchlist.add(tickers)
+        removed = watchlist.prune(cfg.data.max_watch_days)
+        
+        print(f"➕ Added to watchlist: {len(added)}")
+        if added:
+            for t in added:
+                print(f"   • {t}")
+        
+        print(f"➖ Removed (expired): {len(removed)}")
+        if removed:
+            for t in removed:
+                print(f"   • {t}")
+        
+        logger.info("cmd.capture.complete", 
+                   captured=len(tickers),
+                   added=len(added),
+                   removed=len(removed))
+        
+    except TVScreenerError as e:
+        logger.error("cmd.capture.failed", error=str(e))
+        print(f"\n❌ Capture failed: {e}")
+        raise
+
+
+def _scan_symbol(symbol: str, cfg: Config) -> tuple[str, bool, str | None]:
+    """
+    Scan single symbol for buy signal
+    
+    Returns:
+        (symbol, has_signal, error_message)
+    """
+    try:
+        # Get appropriate data source function
+        daily_ohlc_func = get_data_source(cfg.api.provider)
+        df = daily_ohlc_func(symbol)
+        
+        if df is None or len(df) < 30:
+            return symbol, False, "insufficient data"
+        
+        ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
+        
+        if stoch_rsi_buy(ind):
+            return symbol, True, None
+        
+        return symbol, False, None
+        
+    except DataSourceError as e:
+        return symbol, False, str(e)
+    except Exception as e:
+        logger.exception("scan.symbol_error", symbol=symbol)
+        return symbol, False, str(e)
+
+
+def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parallel: bool = False):
+    """Scan watchlist symbols for buy signals"""
+    try:
+        symbols = watchlist.all_symbols()
+        
+        if not symbols:
+            print("\n⚠️  Watchlist is empty. Run 'capture' command first.")
+            logger.warning("cmd.scan.empty_watchlist")
+            return
+        
+        logger.info("cmd.scan.start",
+                   symbol_count=len(symbols),
+                   dry_run=dry_run,
+                   parallel=parallel)
+        
+        print(f"\n🔍 Scanning {len(symbols)} symbol(s) for Stochastic RSI buy signals...")
+        
+        tg = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
+        signals = []
+        errors = []
+        
+        if parallel:
+            # Parallel scanning (faster but harder on rate limits)
+            print("⚡ Using parallel mode (max 3 concurrent)")
+            with ThreadPoolExecutor(max_workers=3) as executor:
+                futures = {executor.submit(_scan_symbol, s, cfg): s for s in symbols}
+                
+                with tqdm(total=len(symbols), desc="Scanning", unit="symbol") as pbar:
+                    for future in as_completed(futures):
+                        symbol, has_signal, error = future.result()
+                        
+                        if error:
+                            errors.append((symbol, error))
+                            pbar.set_postfix_str(f"⚠️  {symbol}: {error[:30]}")
+                        elif has_signal:
+                            signals.append(symbol)
+                            msg = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
+                            
+                            if not dry_run:
+                                try:
+                                    tg.send(msg)
+                                    pbar.set_postfix_str(f"✅ {symbol} signal sent")
+                                except Exception as e:
+                                    logger.error("telegram.send_failed", symbol=symbol, error=str(e))
+                                    pbar.set_postfix_str(f"❌ {symbol} telegram failed")
+                            else:
+                                print(f"\n[DRY RUN] {msg}")
+                        
+                        pbar.update(1)
+        else:
+            # Sequential scanning with progress bar
+            with tqdm(symbols, desc="Scanning", unit="symbol") as pbar:
+                for i, s in enumerate(pbar, start=1):
+                    pbar.set_postfix_str(f"Checking {s}")
+                    
+                    symbol, has_signal, error = _scan_symbol(s, cfg)
+                    
+                    if error:
+                        errors.append((symbol, error))
+                        pbar.set_postfix_str(f"⚠️  {symbol}: {error[:30]}")
+                    elif has_signal:
+                        signals.append(symbol)
+                        msg = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
+                        
+                        if not dry_run:
+                            try:
+                                tg.send(msg)
+                                pbar.set_postfix_str(f"✅ {symbol} signal sent")
+                            except Exception as e:
+                                logger.error("telegram.send_failed", symbol=symbol, error=str(e))
+                                pbar.set_postfix_str(f"❌ {symbol} telegram failed")
+                        else:
+                            print(f"\n[DRY RUN] {msg}")
+                    
+                    # Rate limit delay (skip for last item)
+                    if i < len(symbols):
+                        time.sleep(sleep_between)
+        
+        # Summary
+        print(f"\n✅ Scan complete!")
+        print(f"📊 Buy signals found: {len(signals)}")
+        if signals:
+            for s in signals:
+                print(f"   🎯 {s}")
+        
+        print(f"❌ Errors: {len(errors)}")
+        if errors:
+            for sym, err in errors[:5]:  # Show first 5 errors
+                print(f"   ⚠️  {sym}: {err}")
+            if len(errors) > 5:
+                print(f"   ... and {len(errors) - 5} more")
+        
+        logger.info("cmd.scan.complete",
+                   signals=len(signals),
+                   errors=len(errors))
+        
+    except Exception as e:
+        logger.error("cmd.scan.failed", error=str(e))
+        print(f"\n❌ Scan failed: {e}")
+        raise
+
+
+def cmd_list(cfg: Config):
+    """List current watchlist"""
+    symbols = watchlist.all_symbols()
+    
+    if not symbols:
+        print("\n📋 Watchlist is empty")
+        return
+    
+    print(f"\n📋 Watchlist ({len(symbols)} symbol(s)):")
+    for s in sorted(symbols):
+        print(f"   • {s}")
+    
+    print(f"\n⚙️  Settings:")
+    print(f"   Max watch days: {cfg.data.max_watch_days}")
+    print(f"   API provider: {cfg.api.provider}")
+
+
+def cmd_run(cfg: Config, interval: int = 3600, dry_run: bool = False):
+    """Continuous mode: capture once, then scan periodically"""
+    logger.info("cmd.run.start", interval=interval, dry_run=dry_run)
+    
+    print(f"\n🔄 Starting continuous mode")
+    print(f"   Interval: {interval}s ({interval // 60} minutes)")
+    print(f"   Dry run: {dry_run}")
+    print(f"   Press Ctrl+C to stop\n")
+    
+    # Initial capture
+    print("=" * 50)
+    print("INITIAL CAPTURE")
+    print("=" * 50)
+    cmd_capture(cfg, dry_run=dry_run)
+    
+    cycle = 1
+    try:
+        while True:
+            print(f"\n⏳ Waiting {interval}s before next scan... (Cycle {cycle})")
+            time.sleep(interval)
+            
+            print("=" * 50)
+            print(f"SCAN CYCLE {cycle}")
+            print("=" * 50)
+            
+            try:
+                cmd_scan(cfg, dry_run=dry_run)
+                cycle += 1
+            except KeyboardInterrupt:
+                raise
+            except Exception as e:
+                logger.exception("cmd.run.cycle_error", cycle=cycle)
+                print(f"\n❌ Cycle {cycle} error: {e}")
+                print("   Continuing to next cycle...")
+                cycle += 1
+                
+    except KeyboardInterrupt:
+        print("\n\n👋 Stopped by user")
+        logger.info("cmd.run.stopped_by_user", cycles=cycle)
+
+
+def main(argv: list[str] | None = None):
+    """Main CLI entry point"""
+    parser = argparse.ArgumentParser(
+        prog="tv-ocr-screener",
+        description="TradingView OCR Screener → Telegram Bot",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s capture                    # Take screenshot and update watchlist
+  %(prog)s scan --sleep 20            # Scan with 20s delay between symbols
+  %(prog)s scan --parallel            # Fast parallel scanning
+  %(prog)s run --interval 7200        # Continuous mode, scan every 2 hours
+  %(prog)s list                       # Show current watchlist
+  %(prog)s capture --dry-run          # Test mode (no changes)
+        """
+    )
+    parser.add_argument("--config", default="config.example.yaml", 
+                       help="Config file path (default: config.example.yaml)")
+    parser.add_argument("--dry-run", action="store_true",
+                       help="Dry run mode - no actual changes or messages sent")
+    
+    sub = parser.add_subparsers(dest="cmd", required=True, help="Command to run")
+    
+    # Capture command
+    sub.add_parser("capture", 
+                  help="Take screenshot, extract tickers, update watchlist")
+    
+    # Scan command
+    pscan = sub.add_parser("scan",
+                          help="Scan watchlist for Stochastic RSI buy signals")
+    pscan.add_argument("--sleep", type=int, default=15,
+                      help="Seconds to sleep between symbols (default: 15)")
+    pscan.add_argument("--parallel", action="store_true",
+                      help="Use parallel scanning (faster but risks rate limits)")
+    
+    # Run command
+    prun = sub.add_parser("run",
+                         help="Continuous mode: capture once, then scan periodically")
+    prun.add_argument("--interval", type=int, default=3600,
+                     help="Seconds between scans (default: 3600 = 1 hour)")
+    
+    # List command
+    sub.add_parser("list",
+                  help="Show current watchlist")
+    
+    args = parser.parse_args(argv)
+    
+    try:
+        # Load config
+        cfg = Config.load(args.config)
+        
+        # Execute command
+        if args.cmd == "capture":
+            cmd_capture(cfg, dry_run=args.dry_run)
+        
+        elif args.cmd == "scan":
+            cmd_scan(cfg, 
+                    sleep_between=args.sleep,
+                    dry_run=args.dry_run,
+                    parallel=args.parallel)
+        
+        elif args.cmd == "run":
+            cmd_run(cfg, interval=args.interval, dry_run=args.dry_run)
+        
+        elif args.cmd == "list":
+            cmd_list(cfg)
+        
+        return 0
+        
+    except KeyboardInterrupt:
+        print("\n\n👋 Interrupted by user")
+        return 130
+    except Exception as e:
+        logger.exception("main.fatal_error")
+        print(f"\n💥 Fatal error: {e}")
+        return 1
+
+
+if __name__ == "__main__":
+    exit(main())

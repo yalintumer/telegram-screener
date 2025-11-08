@@ -1,0 +1,21 @@
+# Core dependencies
+pillow>=10.0.0
+pytesseract>=0.3.10
+mss>=9.0.0
+requests>=2.31.0
+pandas>=2.0.0
+pyyaml>=6.0.0
+
+# Enhanced features
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+tenacity>=8.2.0
+tqdm>=4.66.0
+
+# Data source
+yfinance>=0.2.40
+
+# Testing (optional)
+pytest>=7.4.0
+pytest-cov>=4.1.0
+

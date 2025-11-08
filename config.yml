@@ -1,0 +1,15 @@
+telegram:
+  bot_token: "7735605186:AAHNv0iGkp_3UGfsPkkdefTjsi8Amf2LN1g"
+  chat_id: "6155401829"
+data:
+  max_watch_days: 5
+indicators:
+  rsi_period: 14
+  stoch_rsi_period: 14
+  k: 3
+  d: 3
+api:
+  provider: "alphavantage"
+  token: "SBI2J4YKQIH4GTMR"
+screen:
+  region: [50, 428, 280, 416]  # left, top, width, height (ayarla)
