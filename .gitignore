@@ -1,5 +1,6 @@
 # Python
 venv/
+venv_clean/
 __pycache__/
 *.pyc
 *.pyo
@@ -11,10 +12,15 @@ __pycache__/
 dist/
 build/
 
-# Project specific
+# Project specific - HASSAS BİLGİLER!
 .env
+.env.local
+.env.*
+apis.env
 watchlist.json
+signal_history.json
 config.yaml
+config.yml
 shots/
 logs/
 

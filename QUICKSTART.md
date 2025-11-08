@@ -143,7 +143,7 @@ ssh -i ~/screener root@167.99.252.127
 
 ```bash
 # VM'e bağlandıktan sonra:
-cd /root/telegram-screener
+cd /telegram-screener
 ./deploy/test_debug.sh
 ```
 

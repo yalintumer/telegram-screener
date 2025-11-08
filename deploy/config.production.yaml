@@ -2,8 +2,8 @@
 # Bu dosyayı sunucuda config.yaml olarak kullanın
 
 telegram:
-  bot_token: "7735605186:AAHNv0iGkp_3UGfsPkkdefTjsi8Amf2LN1g"
-  chat_id: "6155401829"
+  bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+  chat_id: "YOUR_TELEGRAM_CHAT_ID"
 
 api:
   provider: "yfinance"  # FREE & UNLIMITED!

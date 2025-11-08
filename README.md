@@ -6,7 +6,24 @@
 
 ---
 
-## 📚 Dokümantasyon
+## � GÜVENLİK UYARISI
+
+**⚠️ API Anahtarlarınızı ASLA paylaşmayın veya Git'e commit etmeyin!**
+
+- ✅ `.env` dosyanızı kullanın (`.gitignore`'da zaten var)
+- ✅ `config.yaml` dosyasını `.gitignore`'a ekleyin veya placeholder değerler kullanın
+- ✅ GitHub'a push yapmadan önce hassas bilgileri kontrol edin
+- ❌ ASLA gerçek API anahtarlarını kod deposuna yüklemeyin
+
+**Eğer yanlışlıkla API anahtarlarınızı paylaştıysanız:**
+1. Hemen yeni Telegram bot token alın (@BotFather)
+2. Yeni API anahtarları oluşturun (AlphaVantage)
+3. Eski anahtarları iptal edin
+4. Git geçmişini temizlemeyi düşünün (`git filter-branch` veya BFG Repo Cleaner)
+
+---
+
+## �📚 Dokümantasyon
 
 - 📖 **[QUICKSTART.md](QUICKSTART.md)** — Adım adım başlangıç kılavuzu
 - 📋 **[CHEATSHEET.txt](CHEATSHEET.txt)** — Hızlı komut referansı (yazdır!)

@@ -1,6 +1,6 @@
 telegram:
-  bot_token: "7735605186:AAHNv0iGkp_3UGfsPkkdefTjsi8Amf2LN1g"
-  chat_id: "6155401829"
+  bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
+  chat_id: "YOUR_TELEGRAM_CHAT_ID"
 data:
   max_watch_days: 5
 indicators:
@@ -10,6 +10,6 @@ indicators:
   d: 3
 api:
   provider: "alphavantage"
-  token: "SBI2J4YKQIH4GTMR"
+  token: "YOUR_ALPHA_VANTAGE_API_KEY"
 screen:
   region: [50, 428, 280, 416]  # left, top, width, height (ayarla)
