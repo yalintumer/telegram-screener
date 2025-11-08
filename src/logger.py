@@ -1,6 +1,5 @@
 import logging
 import sys
-import os
 from pathlib import Path
 from datetime import datetime
 
@@ -81,6 +80,4 @@ def setup_logger(level: str = "INFO", log_file: bool = True):
     return StructuredLogger(base_logger)
 
 
-# Get log level from environment variable (default: INFO)
-_log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
-logger = setup_logger(level=_log_level)
+logger = setup_logger()
