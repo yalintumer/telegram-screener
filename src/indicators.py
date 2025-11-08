@@ -20,30 +20,49 @@ def stochastic_rsi(close: pd.Series, rsi_period=14, stoch_period=14, k=3, d=3) -
     return pd.DataFrame({"rsi": r, "k": k_line, "d": d_line})
 
 
-def stoch_rsi_buy(df: pd.DataFrame) -> bool:
+def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 3) -> bool:
     """
     Stochastic RSI buy signal detection.
     
-    Returns True if:
+    Args:
+        df: DataFrame with columns 'rsi', 'k', 'd'
+        lookback_days: Check for cross in last N days (default: 3)
+    
+    Returns True if K line crosses above D line in oversold zone within last N days.
+    
+    Conditions:
     1. K line crosses above D line (bullish cross)
     2. Cross happens in oversold zone (K or D below 20)
     
-    Relaxed logic: Cross can happen when both are below 20, or when one is below 20
+    Looks back N days to catch recent crosses that may have been missed.
     """
-    if len(df) < 2:
+    if len(df) < lookback_days + 1:
         return False
     
-    prev, last = df.iloc[-2], df.iloc[-1]
+    # Check last N days for a bullish cross
+    for i in range(1, lookback_days + 1):
+        idx = -i
+        prev_idx = idx - 1
+        
+        # Boundary check
+        if abs(prev_idx) > len(df):
+            break
+        
+        prev = df.iloc[prev_idx]
+        curr = df.iloc[idx]
+        
+        # NaN check
+        if any(pd.isna(v) for v in [prev.k, prev.d, curr.k, curr.d]):
+            continue
+        
+        # Cross up: K crosses above D
+        cross_up = prev.k <= prev.d and curr.k > curr.d
+        
+        # Oversold: Either line is below 20 during the cross
+        oversold = (curr.k < 0.2 or curr.d < 0.2 or 
+                   prev.k < 0.2 or prev.d < 0.2)
+        
+        if cross_up and oversold:
+            return True
     
-    # NaN check
-    if any(pd.isna(v) for v in [prev.k, prev.d, last.k, last.d]):
-        return False
-    
-    # Cross up: K crosses above D
-    cross_up = prev.k <= prev.d and last.k > last.d
-    
-    # Oversold: Either line is below 20, or both were below 20 during cross
-    oversold = (last.k < 0.2 or last.d < 0.2 or 
-                prev.k < 0.2 or prev.d < 0.2)
-    
-    return cross_up and oversold
+    return False
