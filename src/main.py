@@ -234,6 +234,88 @@ def cmd_list(cfg: Config):
     print(f"   API provider: {cfg.api.provider}")
 
 
+def cmd_add(cfg: Config, symbols: list[str]):
+    """Manually add symbols to watchlist"""
+    symbols = [s.upper().strip() for s in symbols]
+    
+    print(f"\n➕ Adding {len(symbols)} symbol(s) to watchlist...")
+    
+    added = watchlist.add(symbols)
+    
+    if added:
+        print(f"\n✅ Added {len(added)} symbol(s):")
+        for s in added:
+            print(f"   • {s}")
+    else:
+        print(f"\n⚠️  All symbols already in watchlist")
+    
+    # Show current watchlist
+    all_symbols = watchlist.all_symbols()
+    print(f"\n📋 Current watchlist ({len(all_symbols)} symbol(s)):")
+    for s in sorted(all_symbols):
+        print(f"   • {s}")
+
+
+def cmd_remove(cfg: Config, symbols: list[str]):
+    """Manually remove symbols from watchlist"""
+    symbols = [s.upper().strip() for s in symbols]
+    
+    print(f"\n➖ Removing {len(symbols)} symbol(s) from watchlist...")
+    
+    w = watchlist._load()
+    removed = []
+    not_found = []
+    
+    for s in symbols:
+        if s in w:
+            del w[s]
+            removed.append(s)
+        else:
+            not_found.append(s)
+    
+    watchlist._save(w)
+    
+    if removed:
+        print(f"\n✅ Removed {len(removed)} symbol(s):")
+        for s in removed:
+            print(f"   • {s}")
+    
+    if not_found:
+        print(f"\n⚠️  Not found in watchlist ({len(not_found)} symbol(s)):")
+        for s in not_found:
+            print(f"   • {s}")
+    
+    # Show current watchlist
+    all_symbols = watchlist.all_symbols()
+    if all_symbols:
+        print(f"\n📋 Current watchlist ({len(all_symbols)} symbol(s)):")
+        for s in sorted(all_symbols):
+            print(f"   • {s}")
+    else:
+        print(f"\n📋 Watchlist is now empty")
+
+
+def cmd_clear(cfg: Config):
+    """Clear entire watchlist"""
+    all_symbols = watchlist.all_symbols()
+    
+    if not all_symbols:
+        print("\n📋 Watchlist is already empty")
+        return
+    
+    print(f"\n⚠️  About to remove ALL {len(all_symbols)} symbol(s) from watchlist:")
+    for s in sorted(all_symbols):
+        print(f"   • {s}")
+    
+    response = input("\n❓ Are you sure? (yes/no): ").strip().lower()
+    
+    if response in ['yes', 'y']:
+        watchlist._save({})
+        print(f"\n✅ Watchlist cleared! Removed {len(all_symbols)} symbol(s)")
+    else:
+        print("\n❌ Cancelled")
+
+
 def cmd_debug(cfg: Config, symbol: str):
     """Debug a specific symbol - show detailed Stochastic RSI values"""
     try:
@@ -353,6 +435,10 @@ Examples:
   %(prog)s scan --parallel            # Fast parallel scanning
   %(prog)s run --interval 7200        # Continuous mode, scan every 2 hours
   %(prog)s list                       # Show current watchlist
+  %(prog)s add AAPL MSFT GOOGL        # Add symbols to watchlist
+  %(prog)s remove AAPL MSFT           # Remove symbols from watchlist
+  %(prog)s clear                      # Clear entire watchlist (with confirmation)
+  %(prog)s debug AAPL                 # Debug a specific symbol
   %(prog)s capture --dry-run          # Test mode (no changes)
         """
     )
@@ -388,6 +474,22 @@ Examples:
     # List command
     sub.add_parser("list",
                   help="Show current watchlist")
+    
+    # Add command
+    padd = sub.add_parser("add",
+                         help="Manually add symbols to watchlist")
+    padd.add_argument("symbols", type=str, nargs="+",
+                     help="Symbol(s) to add (e.g., AAPL MSFT GOOGL)")
+    
+    # Remove command
+    premove = sub.add_parser("remove",
+                            help="Manually remove symbols from watchlist")
+    premove.add_argument("symbols", type=str, nargs="+",
+                        help="Symbol(s) to remove (e.g., AAPL MSFT)")
+    
+    # Clear command
+    sub.add_parser("clear",
+                  help="Clear entire watchlist (with confirmation)")
     
     # Debug command
     pdebug = sub.add_parser("debug",
@@ -427,6 +529,15 @@ Examples:
         
         elif args.cmd == "list":
             cmd_list(cfg)
+        
+        elif args.cmd == "add":
+            cmd_add(cfg, args.symbols)
+        
+        elif args.cmd == "remove":
+            cmd_remove(cfg, args.symbols)
+        
+        elif args.cmd == "clear":
+            cmd_clear(cfg)
         
         elif args.cmd == "debug":
             cmd_debug(cfg, args.symbol.upper())
