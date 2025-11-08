@@ -23,17 +23,17 @@ def get_data_source(provider: str):
         return daily_ohlc
 
 
-def cmd_capture(cfg: Config, dry_run: bool = False):
+def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int] = None):
     """Capture screenshot, extract tickers, update watchlist"""
     try:
-        logger.info("cmd.capture.start", dry_run=dry_run)
+        logger.info("cmd.capture.start", dry_run=dry_run, click_coords=click_coords)
         
         # Configure tesseract if custom path provided
         if cfg.tesseract.path:
             configure_tesseract(cfg.tesseract.path, cfg.tesseract.lang)
         
         print("📸 Taking screenshot...")
-        img = capture(cfg.screen.region, app_name=cfg.screen.app_name)
+        img = capture(cfg.screen.region, app_name=cfg.screen.app_name, click_before=click_coords)
         
         print("🔍 Extracting tickers with OCR...")
         tickers = extract_tickers(img, cfg.tesseract.config_str)
@@ -140,18 +140,23 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                             errors.append((symbol, error))
                             pbar.set_postfix_str(f"⚠️  {symbol}: {error[:30]}")
                         elif has_signal:
-                            signals.append(symbol)
-                            msg = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
-                            
-                            if not dry_run:
-                                try:
-                                    tg.send(msg)
-                                    pbar.set_postfix_str(f"✅ {symbol} signal sent")
-                                except Exception as e:
-                                    logger.error("telegram.send_failed", symbol=symbol, error=str(e))
-                                    pbar.set_postfix_str(f"❌ {symbol} telegram failed")
+                            # Check grace period before sending
+                            if watchlist.can_send_signal(symbol):
+                                signals.append(symbol)
+                                msg = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
+                                
+                                if not dry_run:
+                                    try:
+                                        tg.send(msg)
+                                        watchlist.mark_signal_sent(symbol)  # Mark after successful send
+                                        pbar.set_postfix_str(f"✅ {symbol} signal sent")
+                                    except Exception as e:
+                                        logger.error("telegram.send_failed", symbol=symbol, error=str(e))
+                                        pbar.set_postfix_str(f"❌ {symbol} telegram failed")
+                                else:
+                                    print(f"\n[DRY RUN] {msg}")
                             else:
-                                print(f"\n[DRY RUN] {msg}")
+                                pbar.set_postfix_str(f"🔇 {symbol} grace period (signal sent recently)")
                         
                         pbar.update(1)
         else:
@@ -166,18 +171,23 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                         errors.append((symbol, error))
                         pbar.set_postfix_str(f"⚠️  {symbol}: {error[:30]}")
                     elif has_signal:
-                        signals.append(symbol)
-                        msg = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
-                        
-                        if not dry_run:
-                            try:
-                                tg.send(msg)
-                                pbar.set_postfix_str(f"✅ {symbol} signal sent")
-                            except Exception as e:
-                                logger.error("telegram.send_failed", symbol=symbol, error=str(e))
-                                pbar.set_postfix_str(f"❌ {symbol} telegram failed")
+                        # Check grace period before sending
+                        if watchlist.can_send_signal(symbol):
+                            signals.append(symbol)
+                            msg = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
+                            
+                            if not dry_run:
+                                try:
+                                    tg.send(msg)
+                                    watchlist.mark_signal_sent(symbol)  # Mark after successful send
+                                    pbar.set_postfix_str(f"✅ {symbol} signal sent")
+                                except Exception as e:
+                                    logger.error("telegram.send_failed", symbol=symbol, error=str(e))
+                                    pbar.set_postfix_str(f"❌ {symbol} telegram failed")
+                            else:
+                                print(f"\n[DRY RUN] {msg}")
                         else:
-                            print(f"\n[DRY RUN] {msg}")
+                            pbar.set_postfix_str(f"🔇 {symbol} grace period (signal sent recently)")
                     
                     # Rate limit delay (skip for last item)
                     if i < len(symbols):
@@ -224,7 +234,72 @@ def cmd_list(cfg: Config):
     print(f"   API provider: {cfg.api.provider}")
 
 
-def cmd_run(cfg: Config, interval: int = 3600, dry_run: bool = False):
+def cmd_debug(cfg: Config, symbol: str):
+    """Debug a specific symbol - show detailed Stochastic RSI values"""
+    try:
+        print(f"\n🔍 Debugging {symbol}...")
+        
+        # Get data
+        daily_ohlc_func = get_data_source(cfg.api.provider)
+        df = daily_ohlc_func(symbol)
+        
+        if df is None or len(df) < 30:
+            print(f"❌ Insufficient data for {symbol}")
+            return
+        
+        print(f"✅ Got {len(df)} days of data")
+        
+        # Calculate indicators
+        ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
+        
+        # Show last 5 rows
+        print(f"\n📊 Last 5 days of Stochastic RSI:")
+        print(ind.tail(5).to_string())
+        
+        # Check signal
+        has_signal = stoch_rsi_buy(ind)
+        
+        print(f"\n🎯 Signal Analysis:")
+        if len(ind) >= 2:
+            prev = ind.iloc[-2]
+            last = ind.iloc[-1]
+            
+            print(f"   Previous: K={prev.k:.4f}, D={prev.d:.4f}")
+            print(f"   Current:  K={last.k:.4f}, D={last.d:.4f}")
+            
+            cross_up = prev.k <= prev.d and last.k > last.d
+            oversold = (last.k < 0.2 or last.d < 0.2 or 
+                       prev.k < 0.2 or prev.d < 0.2)
+            
+            print(f"\n   Cross Up: {'✅ YES' if cross_up else '❌ NO'}")
+            if cross_up:
+                print(f"      (K crossed from {prev.k:.4f} to {last.k:.4f})")
+                print(f"      (D was {prev.d:.4f}, now {last.d:.4f})")
+            
+            print(f"   Oversold: {'✅ YES' if oversold else '❌ NO'}")
+            if oversold:
+                if last.k < 0.2:
+                    print(f"      Current K ({last.k:.4f}) < 0.2")
+                if last.d < 0.2:
+                    print(f"      Current D ({last.d:.4f}) < 0.2")
+                if prev.k < 0.2:
+                    print(f"      Previous K ({prev.k:.4f}) < 0.2")
+                if prev.d < 0.2:
+                    print(f"      Previous D ({prev.d:.4f}) < 0.2")
+            
+            print(f"\n   🚀 BUY SIGNAL: {'✅ YES' if has_signal else '❌ NO'}")
+            
+            # Grace period check
+            if has_signal:
+                can_send = watchlist.can_send_signal(symbol)
+                print(f"   Grace Period: {'✅ Can send' if can_send else '🔇 Recently sent'}")
+        
+    except Exception as e:
+        logger.exception("cmd.debug.failed", symbol=symbol)
+        print(f"\n❌ Debug failed: {e}")
+
+
+def cmd_run(cfg: Config, interval: int = 3600, dry_run: bool = False, click_coords: tuple[int, int] = None):
     """Continuous mode: capture once, then scan periodically"""
     logger.info("cmd.run.start", interval=interval, dry_run=dry_run)
     
@@ -237,7 +312,7 @@ def cmd_run(cfg: Config, interval: int = 3600, dry_run: bool = False):
     print("=" * 50)
     print("INITIAL CAPTURE")
     print("=" * 50)
-    cmd_capture(cfg, dry_run=dry_run)
+    cmd_capture(cfg, dry_run=dry_run, click_coords=click_coords)
     
     cycle = 1
     try:
@@ -289,8 +364,10 @@ Examples:
     sub = parser.add_subparsers(dest="cmd", required=True, help="Command to run")
     
     # Capture command
-    sub.add_parser("capture", 
+    pcapture = sub.add_parser("capture", 
                   help="Take screenshot, extract tickers, update watchlist")
+    pcapture.add_argument("--click", type=str, metavar="X,Y",
+                         help="Click at coordinates X,Y before capture (e.g., --click 150,50)")
     
     # Scan command
     pscan = sub.add_parser("scan",
@@ -305,10 +382,18 @@ Examples:
                          help="Continuous mode: capture once, then scan periodically")
     prun.add_argument("--interval", type=int, default=3600,
                      help="Seconds between scans (default: 3600 = 1 hour)")
+    prun.add_argument("--click", type=str, metavar="X,Y",
+                     help="Click at coordinates X,Y before capture (e.g., --click 150,50)")
     
     # List command
     sub.add_parser("list",
                   help="Show current watchlist")
+    
+    # Debug command
+    pdebug = sub.add_parser("debug",
+                           help="Debug a specific symbol - show detailed Stochastic RSI values")
+    pdebug.add_argument("symbol", type=str,
+                       help="Symbol to debug (e.g., AAPL)")
     
     args = parser.parse_args(argv)
     
@@ -316,9 +401,20 @@ Examples:
         # Load config
         cfg = Config.load(args.config)
         
+        # Parse click coordinates if provided
+        click_coords = None
+        if hasattr(args, 'click') and args.click:
+            try:
+                x, y = map(int, args.click.split(','))
+                click_coords = (x, y)
+                logger.info("click.coords.parsed", x=x, y=y)
+            except Exception as e:
+                print(f"⚠️  Invalid --click format (use X,Y): {args.click}")
+                logger.error("click.coords.parse_error", error=str(e))
+        
         # Execute command
         if args.cmd == "capture":
-            cmd_capture(cfg, dry_run=args.dry_run)
+            cmd_capture(cfg, dry_run=args.dry_run, click_coords=click_coords)
         
         elif args.cmd == "scan":
             cmd_scan(cfg, 
@@ -327,10 +423,13 @@ Examples:
                     parallel=args.parallel)
         
         elif args.cmd == "run":
-            cmd_run(cfg, interval=args.interval, dry_run=args.dry_run)
+            cmd_run(cfg, interval=args.interval, dry_run=args.dry_run, click_coords=click_coords)
         
         elif args.cmd == "list":
             cmd_list(cfg)
+        
+        elif args.cmd == "debug":
+            cmd_debug(cfg, args.symbol.upper())
         
         return 0
         

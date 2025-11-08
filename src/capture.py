@@ -8,6 +8,13 @@ import subprocess
 import platform
 from .logger import logger
 
+try:
+    import pyautogui
+    PYAUTOGUI_AVAILABLE = True
+except ImportError:
+    PYAUTOGUI_AVAILABLE = False
+    logger.warning("pyautogui.not.available", message="Mouse click feature disabled")
+
 
 def activate_app(app_name: str) -> bool:
     """Activate (focus) an application by name.
@@ -54,11 +61,12 @@ def activate_app(app_name: str) -> bool:
         return False
 
 
-def capture(region: list[int], out_dir: str = "shots", app_name: str = None) -> str:
+def capture(region: list[int], out_dir: str = "shots", app_name: str = None, click_before: tuple[int, int] = None) -> str:
     """Take a screenshot of the given region and save it to out_dir.
 
     region: [left, top, width, height]
     app_name: Application name to activate before capture (macOS)
+    click_before: (x, y) coordinates to click before taking screenshot (to focus window)
     returns saved image path
     """
     Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -66,6 +74,25 @@ def capture(region: list[int], out_dir: str = "shots", app_name: str = None) -> 
     # Activate application if specified
     if app_name:
         activate_app(app_name)
+        
+        # Switch to first tab with Cmd+1 (for TradingView)
+        if PYAUTOGUI_AVAILABLE and platform.system() == "Darwin":
+            try:
+                logger.info("capture.switching_to_first_tab")
+                pyautogui.hotkey('command', '1')
+                time.sleep(0.5)  # Wait for tab switch
+            except Exception as e:
+                logger.error("capture.tab_switch_failed", error=str(e))
+    
+    # Click on specific coordinates before capture (to ensure correct window focus)
+    if click_before and PYAUTOGUI_AVAILABLE:
+        x, y = click_before
+        try:
+            pyautogui.click(x, y)
+            logger.info("capture.click", x=x, y=y)
+            time.sleep(0.3)  # Wait for click to register
+        except Exception as e:
+            logger.error("capture.click.failed", x=x, y=y, error=str(e))
     
     left, top, width, height = region
     monitor = {"left": left, "top": top, "width": width, "height": height}
