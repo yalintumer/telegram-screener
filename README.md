@@ -6,6 +6,14 @@
 
 ---
 
+## 📚 Dokümantasyon
+
+- 📖 **[QUICKSTART.md](QUICKSTART.md)** — Adım adım başlangıç kılavuzu
+- 📋 **[CHEATSHEET.txt](CHEATSHEET.txt)** — Hızlı komut referansı (yazdır!)
+- 📘 **[README.md](README.md)** — Detaylı teknik döküman (bu dosya)
+
+---
+
 ## ✨ Özellikler
 
 - 📸 **Otomatik ekran görüntüsü** + gelişmiş OCR preprocessing
