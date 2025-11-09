@@ -33,6 +33,7 @@ def _save_signal_history(d: dict):
 def can_add_to_watchlist(symbol: str) -> tuple[bool, str]:
     """
     Check if a symbol can be added to watchlist (respects grace period from last signal).
+    Grace period is calculated in business days (weekdays only).
     Returns (can_add: bool, reason: str)
     """
     history = _load_signal_history()
@@ -40,13 +41,13 @@ def can_add_to_watchlist(symbol: str) -> tuple[bool, str]:
         return True, "No previous signal"
     
     last_signal = date.fromisoformat(history[symbol]["last_signal"])
-    days_since = (date.today() - last_signal).days
+    business_days_since = _business_days_between(last_signal, date.today())
     
-    if days_since >= GRACE_PERIOD_DAYS:
-        return True, f"Grace period expired ({days_since} days since last signal)"
+    if business_days_since >= GRACE_PERIOD_DAYS:
+        return True, f"Grace period expired ({business_days_since} business days since last signal)"
     
-    remaining = GRACE_PERIOD_DAYS - days_since
-    return False, f"Grace period active ({remaining} days remaining)"
+    remaining = GRACE_PERIOD_DAYS - business_days_since
+    return False, f"Grace period active ({remaining} business days remaining)"
 
 
 def add(symbols: list[str]) -> list[str]:
@@ -65,13 +66,45 @@ def add(symbols: list[str]) -> list[str]:
     return added
 
 
+def _business_days_between(start_date: date, end_date: date) -> int:
+    """
+    Calculate business days (weekdays) between two dates.
+    INCLUDES start_date, EXCLUDES end_date.
+    
+    Example: Monday to Friday = 5 business days (Mon, Tue, Wed, Thu, Fri)
+    """
+    if start_date >= end_date:
+        return 0
+    
+    business_days = 0
+    current = start_date
+    # Changed: current < end_date (was correct) but we start from start_date itself
+    while current < end_date:
+        # 0 = Monday, 6 = Sunday
+        if current.weekday() < 5:  # Monday to Friday
+            business_days += 1
+        current += timedelta(days=1)
+    return business_days
+
+
 def prune(max_days: int) -> list[str]:
+    """
+    Remove symbols older than max_days (business days).
+    
+    Logic: If a symbol was added on Monday and max_days=5:
+      - Monday (day 1), Tuesday (day 2), ... Friday (day 5)
+      - On Monday (day 6), it gets removed
+      
+    This means: business_days > max_days (not >=)
+    """
     w = _load()
     removed = []
     today = date.today()
     for s, meta in list(w.items()):
         added = date.fromisoformat(meta.get("added"))
-        if (today - added).days >= max_days:
+        business_days = _business_days_between(added, today)
+        # Changed: > instead of >= so the symbol stays for max_days full business days
+        if business_days > max_days:
             removed.append(s)
             del w[s]
     _save(w)
@@ -118,6 +151,7 @@ def can_send_signal(symbol: str) -> bool:
 def cleanup_old_signals(retention_days: int = HISTORY_RETENTION_DAYS) -> int:
     """
     Remove old signal records from history.
+    Uses business days for consistency with grace period logic.
     Returns count of removed records.
     """
     history = _load_signal_history()
@@ -129,9 +163,10 @@ def cleanup_old_signals(retention_days: int = HISTORY_RETENTION_DAYS) -> int:
     
     for symbol in list(history.keys()):
         last_signal = date.fromisoformat(history[symbol]["last_signal"])
-        days_since = (today - last_signal).days
+        # Changed: Use business days instead of calendar days
+        business_days_since = _business_days_between(last_signal, today)
         
-        if days_since >= retention_days:
+        if business_days_since > retention_days:
             del history[symbol]
             removed_count += 1
     

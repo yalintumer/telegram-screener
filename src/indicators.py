@@ -2,9 +2,18 @@ import pandas as pd
 
 
 def rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    """
+    Calculate RSI (Relative Strength Index)
+    
+    Handles division by zero when loss=0 (all gains, no losses)
+    """
     delta = series.diff()
     gain = delta.clip(lower=0).rolling(period).mean()
     loss = (-delta.clip(upper=0)).rolling(period).mean()
+    
+    # Prevent division by zero: replace 0 with tiny value
+    loss = loss.replace(0, 1e-10)
+    
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
@@ -36,7 +45,11 @@ def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 3) -> bool:
     
     Looks back N days to catch recent crosses that may have been missed.
     """
-    if len(df) < lookback_days + 1:
+    # Need at least lookback_days + 1 rows for current + previous comparisons
+    # For lookback_days=3, we need idx=-3,-2,-1 and prev_idx=-4,-3,-2
+    # So minimum required: lookback_days + 2
+    min_required = lookback_days + 2
+    if len(df) < min_required:
         return False
     
     # Check last N days for a bullish cross
@@ -44,7 +57,7 @@ def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 3) -> bool:
         idx = -i
         prev_idx = idx - 1
         
-        # Boundary check
+        # Double check boundary (should be safe now)
         if abs(prev_idx) > len(df):
             break
         
