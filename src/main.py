@@ -14,6 +14,7 @@ from .indicators import stochastic_rsi, stoch_rsi_buy
 from .logger import logger
 from .exceptions import TVScreenerError, DataSourceError
 from .validation import sanitize_symbols
+from .rate_limiter import AdaptiveRateLimiter
 
 # Import the correct data source based on config
 def get_data_source(provider: str) -> Callable[[str, int], pd.DataFrame]:
@@ -134,7 +135,7 @@ def _scan_symbol(symbol: str, cfg: Config) -> tuple[str, bool, str | None]:
 
 
 def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parallel: bool = False):
-    """Scan watchlist symbols for buy signals"""
+    """Scan watchlist symbols for buy signals with adaptive rate limiting"""
     try:
         # Clean up old signal history records (30+ days)
         removed = watchlist.cleanup_old_signals()
@@ -159,10 +160,21 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
         signals = []
         errors = []
         
+        # Adaptive rate limiter (starts at 1s delay, adjusts based on errors)
+        rate_limiter = AdaptiveRateLimiter(
+            initial_delay=1.0,
+            min_delay=0.5,
+            max_delay=5.0,
+            backoff_factor=1.5,
+            recovery_factor=0.9
+        )
+        
         if parallel:
-            # Parallel scanning (faster but harder on rate limits)
-            print("⚡ Using parallel mode (max 3 concurrent)")
-            with ThreadPoolExecutor(max_workers=3) as executor:
+            # Parallel scanning with better concurrency control
+            max_workers = min(3, len(symbols))  # Don't spawn more workers than needed
+            print(f"⚡ Using parallel mode ({max_workers} concurrent workers)")
+            
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {executor.submit(_scan_symbol, s, cfg): s for s in symbols}
                 
                 with tqdm(total=len(symbols), desc="Scanning", unit="symbol") as pbar:
@@ -171,8 +183,11 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                         
                         if error:
                             errors.append((symbol, error))
+                            rate_limiter.report_error()
                             pbar.set_postfix_str(f"⚠️  {symbol}: {error[:30]}")
                         elif has_signal:
+                            rate_limiter.report_success()
+                            
                             # Check grace period before sending
                             if watchlist.can_send_signal(symbol):
                                 signals.append(symbol)
@@ -181,29 +196,44 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                                 if not dry_run:
                                     try:
                                         tg.send(msg)
-                                        watchlist.mark_signal_sent(symbol)  # Remove from watchlist after signal sent
-                                        pbar.set_postfix_str(f"✅ {symbol} signal sent & removed from watchlist")
+                                        watchlist.mark_signal_sent(symbol)
+                                        pbar.set_postfix_str(f"✅ {symbol} sent & removed")
                                     except Exception as e:
                                         logger.error("telegram.send_failed", symbol=symbol, error=str(e))
                                         pbar.set_postfix_str(f"❌ {symbol} telegram failed")
                                 else:
                                     print(f"\n[DRY RUN] {msg}")
                             else:
-                                pbar.set_postfix_str(f"⏭️ {symbol} already processed")
+                                pbar.set_postfix_str(f"⏭️ {symbol} grace period active")
+                        else:
+                            rate_limiter.report_success()
                         
                         pbar.update(1)
+                        
+                        # Show rate limiter stats periodically
+                        if pbar.n % 5 == 0:
+                            stats = rate_limiter.get_stats()
+                            pbar.set_description(f"Scanning (delay: {stats['current_delay']}s)")
         else:
-            # Sequential scanning with progress bar
+            # Sequential scanning with adaptive delays
+            print(f"🐌 Sequential mode (delay: {sleep_between}s between symbols)")
+            
             with tqdm(symbols, desc="Scanning", unit="symbol") as pbar:
                 for i, s in enumerate(pbar, start=1):
                     pbar.set_postfix_str(f"Checking {s}")
+                    
+                    # Apply rate limiting
+                    rate_limiter.wait()
                     
                     symbol, has_signal, error = _scan_symbol(s, cfg)
                     
                     if error:
                         errors.append((symbol, error))
+                        rate_limiter.report_error()
                         pbar.set_postfix_str(f"⚠️  {symbol}: {error[:30]}")
                     elif has_signal:
+                        rate_limiter.report_success()
+                        
                         # Check grace period before sending
                         if watchlist.can_send_signal(symbol):
                             signals.append(symbol)
@@ -212,19 +242,29 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                             if not dry_run:
                                 try:
                                     tg.send(msg)
-                                    watchlist.mark_signal_sent(symbol)  # Remove from watchlist after signal sent
-                                    pbar.set_postfix_str(f"✅ {symbol} signal sent & removed from watchlist")
+                                    watchlist.mark_signal_sent(symbol)
+                                    pbar.set_postfix_str(f"✅ {symbol} sent & removed")
                                 except Exception as e:
                                     logger.error("telegram.send_failed", symbol=symbol, error=str(e))
                                     pbar.set_postfix_str(f"❌ {symbol} telegram failed")
                             else:
                                 print(f"\n[DRY RUN] {msg}")
                         else:
-                            pbar.set_postfix_str(f"⏭️ {symbol} already processed")
+                            pbar.set_postfix_str(f"⏭️ {symbol} grace period active")
+                    else:
+                        rate_limiter.report_success()
                     
-                    # Rate limit delay (skip for last item)
-                    if i < len(symbols):
-                        time.sleep(sleep_between)
+                    # Update progress description with rate limit stats
+                    if i % 3 == 0:
+                        stats = rate_limiter.get_stats()
+                        pbar.set_description(f"Scanning (delay: {stats['current_delay']}s)")
+        
+        # Print rate limiter final stats
+        final_stats = rate_limiter.get_stats()
+        print(f"\n⚡ Rate Limiter Stats:")
+        print(f"   Final delay: {final_stats['current_delay']}s")
+        print(f"   Success streak: {final_stats['success_streak']}")
+        print(f"   Total errors: {final_stats['error_count']}")
         
         # Summary
         print(f"\n✅ Scan complete!")
