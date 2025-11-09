@@ -501,26 +501,28 @@ def cmd_run(cfg: Config, interval: int = 3600, dry_run: bool = False, click_coor
     """Continuous mode: capture once, then scan periodically"""
     logger.info("cmd.run.start", interval=interval, dry_run=dry_run)
     
-    print(f"\n🔄 Starting continuous mode")
-    print(f"   Interval: {interval}s ({interval // 60} minutes)")
-    print(f"   Dry run: {dry_run}")
-    print(f"   Press Ctrl+C to stop\n")
+    if dry_run:
+        ui.print_dry_run_banner()
+    
+    # Show run configuration
+    ui.print_header("🔄 Continuous Mode", "Capture once, then scan periodically")
+    
+    ui.console.print(f"\n[bold cyan]⚙️  Configuration:[/bold cyan]")
+    ui.console.print(f"   Interval: [yellow]{interval}s[/yellow] ([dim]{interval // 60} minutes[/dim])")
+    ui.console.print(f"   Dry run: [yellow]{'Yes' if dry_run else 'No'}[/yellow]")
+    ui.console.print(f"   [dim]Press Ctrl+C to stop[/dim]\n")
     
     # Initial capture
-    print("=" * 50)
-    print("INITIAL CAPTURE")
-    print("=" * 50)
+    ui.print_section("📸 Initial Capture")
     cmd_capture(cfg, dry_run=dry_run, click_coords=click_coords)
     
     cycle = 1
     try:
         while True:
-            print(f"\n⏳ Waiting {interval}s before next scan... (Cycle {cycle})")
+            ui.console.print(f"\n[cyan]⏳ Waiting {interval}s before next scan... [dim](Cycle {cycle})[/dim][/cyan]")
             time.sleep(interval)
             
-            print("=" * 50)
-            print(f"SCAN CYCLE {cycle}")
-            print("=" * 50)
+            ui.print_section(f"🔍 Scan Cycle {cycle}")
             
             try:
                 cmd_scan(cfg, dry_run=dry_run)
@@ -529,12 +531,13 @@ def cmd_run(cfg: Config, interval: int = 3600, dry_run: bool = False, click_coor
                 raise
             except Exception as e:
                 logger.exception("cmd.run.cycle_error", cycle=cycle)
-                print(f"\n❌ Cycle {cycle} error: {e}")
-                print("   Continuing to next cycle...")
+                ui.print_error(f"Cycle {cycle} error: {e}")
+                ui.console.print("   [dim]Continuing to next cycle...[/dim]")
                 cycle += 1
                 
     except KeyboardInterrupt:
-        print("\n\n👋 Stopped by user")
+        ui.console.print("\n\n[bold yellow]👋 Stopped by user[/bold yellow]")
+        ui.print_info(f"Completed {cycle} cycles")
         logger.info("cmd.run.stopped_by_user", cycles=cycle)
 
 
@@ -627,7 +630,7 @@ Examples:
                 click_coords = (x, y)
                 logger.info("click.coords.parsed", x=x, y=y)
             except Exception as e:
-                print(f"⚠️  Invalid --click format (use X,Y): {args.click}")
+                ui.print_warning(f"Invalid --click format (use X,Y): {args.click}")
                 logger.error("click.coords.parse_error", error=str(e))
         
         # Execute command
@@ -661,11 +664,11 @@ Examples:
         return 0
         
     except KeyboardInterrupt:
-        print("\n\n👋 Interrupted by user")
+        ui.console.print("\n\n[bold yellow]👋 Interrupted by user[/bold yellow]")
         return 130
     except Exception as e:
         logger.exception("main.fatal_error")
-        print(f"\n💥 Fatal error: {e}")
+        ui.print_error(f"Fatal error: {e}")
         return 1
 
 
