@@ -43,7 +43,42 @@ def quick_add(symbols):
     
     return len(added) > 0
 
-def sync_to_vm():
+
+def quick_remove(symbols):
+    """Remove symbols from watchlist.json"""
+    watchlist_path = Path("watchlist.json")
+    
+    # Load existing
+    if not watchlist_path.exists():
+        print("❌ Watchlist file not found!")
+        return False
+    
+    data = json.loads(watchlist_path.read_text())
+    
+    # Remove symbols
+    removed = []
+    not_found = []
+    
+    for symbol in symbols:
+        symbol = symbol.upper().strip()
+        if symbol in data:
+            del data[symbol]
+            removed.append(symbol)
+            print(f"✅ Removed: {symbol}")
+        else:
+            not_found.append(symbol)
+            print(f"⚠️  Not found: {symbol}")
+    
+    # Save
+    if removed:
+        watchlist_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    
+    print(f"\n📋 Total in watchlist: {len(data)}")
+    print(f"➖ Removed: {len(removed)}")
+    
+    return len(removed) > 0
+
+def sync_to_vm(action="Update"):
     """Push changes to Git and update VM"""
     try:
         print("\n🔄 Syncing to VM...")
@@ -56,7 +91,7 @@ def sync_to_vm():
             subprocess.run(["git", "add", "signal_history.json"], capture_output=True)
         
         # Git commit
-        commit_msg = f"Add symbols - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+        commit_msg = f"{action} watchlist - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
         result = subprocess.run(["git", "commit", "-m", commit_msg], 
                               capture_output=True, text=True)
         
@@ -70,7 +105,7 @@ def sync_to_vm():
         
         # Update VM (if configured)
         if VM_IP != "YOUR_SERVER_IP":
-            ssh_cmd = f"cd {VM_PATH} && git pull && sudo systemctl restart telegram-screener"
+            ssh_cmd = f"cd {VM_PATH} && git reset --hard && git pull && sudo systemctl restart telegram-screener"
             subprocess.run(["ssh", f"{VM_USER}@{VM_IP}", ssh_cmd],
                          capture_output=True, timeout=30)
             print("✅ VM updated!")
@@ -81,22 +116,38 @@ def sync_to_vm():
         print(f"⚠️  Sync error: {e}")
 
 if __name__ == "__main__":
+    # Check for sync-only mode
+    if "--sync-only" in sys.argv or "--push" in sys.argv:
+        print("📤 Sync-only mode: Pushing current watchlist to VM...")
+        sync_to_vm("Update")
+        sys.exit(0)
+    
     if len(sys.argv) < 2:
         print("Usage: python quick_add.py AAPL MSFT TSLA [--sync]")
+        print("       python quick_add.py --remove AAPL MSFT [--sync]")
+        print("       python quick_add.py --sync-only   (just push current state)")
         print("\nOptions:")
-        print("  --sync    Auto push to Git and update VM")
+        print("  --sync      Auto push to Git and update VM")
+        print("  --remove    Remove symbols instead of adding")
+        print("  --sync-only Push current watchlist without adding/removing")
         sys.exit(1)
     
-    # Check for --sync flag
+    # Check for flags
     auto_sync = "--sync" in sys.argv
-    symbols = [s for s in sys.argv[1:] if s != "--sync"]
+    remove_mode = "--remove" in sys.argv
+    symbols = [s for s in sys.argv[1:] if s not in ["--sync", "--remove"]]
     
-    # Add symbols
-    changed = quick_add(symbols)
+    # Add or remove symbols
+    if remove_mode:
+        changed = quick_remove(symbols)
+        action = "Remove symbols from"
+    else:
+        changed = quick_add(symbols)
+        action = "Add symbols to"
     
     # Auto sync if requested and changes were made
     if auto_sync and changed:
-        sync_to_vm()
+        sync_to_vm(action)
     elif changed:
         print("\n💡 Tip: Use --sync to auto-push to Git and update VM")
         print("   Example: python quick_add.py AAPL MSFT --sync")
