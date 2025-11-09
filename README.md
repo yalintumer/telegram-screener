@@ -185,7 +185,42 @@ python -m src.main scan --help
 
 ## ⚙️ Yapılandırma
 
-### config.yaml örneği
+### Environment Variables (.env)
+
+**Önerilen yöntem**: Hassas bilgiler için `.env` dosyası kullanın:
+
+```bash
+# .env.example'dan kopyala
+cp .env.example .env
+
+# .env dosyasını düzenle
+nano .env
+```
+
+**Örnek `.env` içeriği:**
+
+```bash
+# Telegram Bot Configuration
+TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
+TELEGRAM_CHAT_ID=987654321
+
+# API Configuration
+API_PROVIDER=yfinance
+API_TOKEN=YOUR_ALPHAVANTAGE_KEY  # yfinance için gerekli değil
+RATE_LIMIT_PER_MINUTE=5
+
+# Server Deployment (Opsiyonel - quick_add.py için)
+VM_IP=YOUR_SERVER_IP
+VM_USER=root
+VM_PATH=~/telegram-screener
+
+# Logging
+LOG_LEVEL=INFO
+```
+
+⚠️ **Önemli**: `.env` dosyası `.gitignore`'da olmalı (zaten ekli). ASLA Git'e commit etmeyin!
+
+### config.yaml örneği (Alternatif)
 
 ```yaml
 telegram:

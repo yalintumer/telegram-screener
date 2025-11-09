@@ -40,13 +40,18 @@ class RateLimiter:
             
             # If at limit, wait
             if len(self.calls) >= self.max_calls:
-                sleep_time = self.calls[0] + self.time_window - now
-                if sleep_time > 0:
-                    time.sleep(sleep_time)
-                    # Re-clean after sleep
-                    now = time.time()
-                    while self.calls and self.calls[0] < now - self.time_window:
-                        self.calls.popleft()
+                # Handle edge case: if calls deque is not empty
+                if self.calls:
+                    sleep_time = self.calls[0] + self.time_window - now
+                    if sleep_time > 0:
+                        time.sleep(sleep_time)
+                        # Re-clean after sleep
+                        now = time.time()
+                        while self.calls and self.calls[0] < now - self.time_window:
+                            self.calls.popleft()
+                else:
+                    # Edge case: max_calls is 0, wait full window
+                    time.sleep(self.time_window)
             
             # Record this call
             self.calls.append(now)

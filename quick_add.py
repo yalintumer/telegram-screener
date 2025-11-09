@@ -4,13 +4,18 @@
 import sys
 import json
 import subprocess
+import os
 from pathlib import Path
 from datetime import date, datetime
+from dotenv import load_dotenv
 
-# VM Configuration (edit these)
-VM_IP = "167.99.252.127"
-VM_USER = "root"
-VM_PATH = "~/telegram-screener"
+# Load environment variables from .env file
+load_dotenv()
+
+# VM Configuration (read from environment variables)
+VM_IP = os.getenv("VM_IP", "YOUR_SERVER_IP")
+VM_USER = os.getenv("VM_USER", "root")
+VM_PATH = os.getenv("VM_PATH", "~/telegram-screener")
 
 def quick_add(symbols):
     """Add symbols directly to watchlist.json"""
