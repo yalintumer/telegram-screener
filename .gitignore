@@ -24,6 +24,9 @@ config.yml
 shots/
 logs/
 
+# Deprecated files
+deprecated/
+
 # macOS
 .DS_Store
 
