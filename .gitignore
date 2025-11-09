@@ -17,8 +17,8 @@ build/
 .env.local
 .env.*
 apis.env
-watchlist.json
-signal_history.json
+# watchlist.json  # Commented out - needed for sync between Mac and VM
+# signal_history.json  # Commented out - needed for sync
 config.yaml
 config.yml
 shots/

@@ -48,9 +48,12 @@ def sync_to_vm():
     try:
         print("\n🔄 Syncing to VM...")
         
-        # Git add
-        subprocess.run(["git", "add", "watchlist.json", "signal_history.json"], 
-                      check=True, capture_output=True)
+        # Git add (handle missing files gracefully)
+        subprocess.run(["git", "add", "watchlist.json"], check=True, capture_output=True)
+        
+        # Try to add signal_history.json if it exists
+        if Path("signal_history.json").exists():
+            subprocess.run(["git", "add", "signal_history.json"], capture_output=True)
         
         # Git commit
         commit_msg = f"Add symbols - {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
