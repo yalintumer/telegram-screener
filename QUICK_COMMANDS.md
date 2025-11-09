@@ -120,14 +120,27 @@ cd "/Users/yalintumer/Desktop/Telegram Proje" && git add . && git commit -m "Upd
 Mac'inizde `.zshrc` veya `.bashrc` dosyanıza ekleyin:
 
 ```bash
-# Telegram Screener Aliases
+# Telegram Screener Aliases - VM Management
 alias tvm='ssh root@167.99.252.127'
 alias tvstatus='ssh root@167.99.252.127 "systemctl status telegram-screener --no-pager"'
 alias tvlogs='ssh root@167.99.252.127 "journalctl -u telegram-screener -f"'
 alias tvrestart='ssh root@167.99.252.127 "systemctl restart telegram-screener"'
+alias tvstop='ssh root@167.99.252.127 "systemctl stop telegram-screener"'
+alias tvstart='ssh root@167.99.252.127 "systemctl start telegram-screener"'
+
+# Watchlist Operations
 alias tvlist='ssh root@167.99.252.127 "cd ~/telegram-screener && cat watchlist.json"'
 alias tvcapture='cd "/Users/yalintumer/Desktop/Telegram Proje" && ./capture_and_sync.sh'
 alias tvadd='cd "/Users/yalintumer/Desktop/Telegram Proje" && python3 quick_add.py'
+
+# Monitoring & Debug
+alias tvgrace='cd "/Users/yalintumer/Desktop/Telegram Proje" && python3 check_grace_periods.py'
+alias tvcompare='cd "/Users/yalintumer/Desktop/Telegram Proje" && ./compare_watchlists.sh'
+alias tvhealth='cd "/Users/yalintumer/Desktop/Telegram Proje" && python3 quick_health_check.py'
+
+# Git & Sync
+alias tvpush='cd "/Users/yalintumer/Desktop/Telegram Proje" && git add . && git commit -m "Update" && git push'
+alias tvsync='cd "/Users/yalintumer/Desktop/Telegram Proje" && python3 quick_add.py --sync-only'
 alias tvcd='cd "/Users/yalintumer/Desktop/Telegram Proje"'
 ```
 
@@ -136,12 +149,29 @@ Sonra:
 source ~/.zshrc
 
 # Artık kullanabilirsiniz:
+# VM Yönetimi
+tvm             # SSH ile VM'e bağlan
 tvstatus        # Servis durumu
-tvlogs          # Log izle
-tvrestart       # Restart
-tvlist          # Watchlist göster
-tvcapture       # Screenshot al ve sync et
-tvadd AAPL --sync  # Sembol ekle
+tvlogs          # Canlı log izle
+tvrestart       # Servisi restart et
+tvstop          # Servisi durdur
+tvstart         # Servisi başlat
+
+# Watchlist İşlemleri
+tvlist          # VM'deki watchlist göster
+tvcapture       # Screenshot al + sync
+tvadd AAPL MSFT --sync      # Sembol ekle + sync
+tvadd AAPL --remove --sync  # Sembol sil + sync
+
+# Monitoring & Debug
+tvgrace         # Grace period'daki sembolleri göster
+tvcompare       # Local vs VM karşılaştır
+tvhealth        # Sistem sağlık kontrolü
+
+# Git & Sync
+tvpush          # Git commit + push
+tvsync          # Sadece sync (watchlist'i VM'e gönder)
+tvcd            # Proje klasörüne git
 ```
 
 ## 📝 HIZLI TESTLERİ
@@ -150,6 +180,14 @@ tvadd AAPL --sync  # Sembol ekle
 # Sistem sağlık kontrolü (Mac)
 cd "/Users/yalintumer/Desktop/Telegram Proje"
 python3 quick_health_check.py
+
+# Grace period kontrolü (Mac)
+cd "/Users/yalintumer/Desktop/Telegram Proje"
+python3 check_grace_periods.py
+
+# Local vs VM karşılaştır (Mac)
+cd "/Users/yalintumer/Desktop/Telegram Proje"
+./compare_watchlists.sh
 
 # VM bağlantı testi (Mac)
 ssh root@167.99.252.127 "echo OK"
@@ -161,7 +199,45 @@ cat watchlist.json | grep -c "added"
 ssh root@167.99.252.127 "cd ~/telegram-screener && cat watchlist.json | grep -c 'added'"
 ```
 
-## 🔥 ACİL DURUM
+## � MONİTORİNG ARAÇLARI
+
+### Grace Period Kontrolü
+Hangi semboller grace period'da (5 iş günü sinyal gönderilmez):
+
+```bash
+cd "/Users/yalintumer/Desktop/Telegram Proje"
+python3 check_grace_periods.py
+
+# Çıktı örneği:
+# ⏰ Grace Period Status (5 business days):
+# 🟢 DASH: 5 business days left (signaled 1x)
+```
+
+### Watchlist Karşılaştırma
+Local ve VM'deki watchlist'leri karşılaştır:
+
+```bash
+cd "/Users/yalintumer/Desktop/Telegram Proje"
+./compare_watchlists.sh
+
+# Çıktı örneği:
+# 🔍 Watchlist Comparison
+# ======================
+# 📱 LOCAL:
+# AAPL
+# CRH
+# LMT
+# 
+# 🖥️  VM:
+# AAPL
+# CRH
+# LMT
+# 
+# 🔄 DIFF:
+# ✅ In sync!
+```
+
+## �🔥 ACİL DURUM
 
 ```bash
 # Servisi acil restart (sorun varsa)
@@ -201,16 +277,33 @@ ssh root@167.99.252.127 "free -h"
 ```bash
 # 1. Screenshot al ve gönder
 ./capture_and_sync.sh
+# VEYA: tvcapture
 
 # 2. Manuel sembol ekle
 python3 quick_add.py AAPL MSFT --sync
+# VEYA: tvadd AAPL MSFT --sync
 
 # 3. Sembol çıkar
 python3 quick_add.py --remove AAPL --sync
+# VEYA: tvadd AAPL --remove --sync
 
 # 4. VM durumu kontrol
 ssh root@167.99.252.127 "systemctl status telegram-screener"
+# VEYA: tvstatus
 
 # 5. Log izle
 ssh root@167.99.252.127 "journalctl -u telegram-screener -f"
+# VEYA: tvlogs
+
+# 6. Grace period kontrol
+python3 check_grace_periods.py
+# VEYA: tvgrace
+
+# 7. Local vs VM karşılaştır
+./compare_watchlists.sh
+# VEYA: tvcompare
+
+# 8. Servisi restart
+ssh root@167.99.252.127 "systemctl restart telegram-screener"
+# VEYA: tvrestart
 ```
