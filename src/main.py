@@ -5,8 +5,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 import pandas as pd
 from .config import Config
-from .capture import capture
-from .ocr import extract_tickers, configure_tesseract
 from . import watchlist
 from .telegram_client import TelegramClient
 from .indicators import stochastic_rsi, stoch_rsi_buy
@@ -37,6 +35,10 @@ def get_data_source(provider: str) -> Callable[[str, int], pd.DataFrame]:
 def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int] = None):
     """Capture screenshot, extract tickers, update watchlist"""
     try:
+        # Lazy import - only import when capture is actually used
+        from .capture import capture
+        from .ocr import extract_tickers, configure_tesseract
+        
         logger.info("cmd.capture.start", dry_run=dry_run, click_coords=click_coords)
         
         if dry_run:
