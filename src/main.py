@@ -4,7 +4,6 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 import pandas as pd
-from tqdm import tqdm
 from .config import Config
 from .capture import capture
 from .ocr import extract_tickers, configure_tesseract
@@ -15,6 +14,7 @@ from .logger import logger
 from .exceptions import TVScreenerError, DataSourceError
 from .validation import sanitize_symbols
 from .rate_limiter import AdaptiveRateLimiter
+from . import ui
 
 # Import the correct data source based on config
 def get_data_source(provider: str) -> Callable[[str, int], pd.DataFrame]:
@@ -39,14 +39,19 @@ def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int
     try:
         logger.info("cmd.capture.start", dry_run=dry_run, click_coords=click_coords)
         
+        if dry_run:
+            ui.print_dry_run_banner()
+        
+        ui.print_header("📸 Screen Capture", "Extract tickers from TradingView screener")
+        
         # Configure tesseract if custom path provided
         if cfg.tesseract.path:
             configure_tesseract(cfg.tesseract.path, cfg.tesseract.lang)
         
-        print("📸 Taking screenshot...")
+        ui.print_info("Taking screenshot...")
         img = capture(cfg.screen.region, app_name=cfg.screen.app_name, click_before=click_coords)
         
-        print("🔍 Extracting tickers with OCR...")
+        ui.print_info("Extracting tickers with OCR...")
         tickers = extract_tickers(img, cfg.tesseract.config_str)
         
         # Cleanup screenshot
@@ -56,25 +61,20 @@ def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int
         except Exception as e:
             logger.warning("screenshot.remove_failed", error=str(e))
         
+        ui.print_success(f"Found {len(tickers)} ticker(s): {', '.join(tickers)}")
+        
         if dry_run:
-            print(f"\n[DRY RUN] Found {len(tickers)} ticker(s): {', '.join(tickers)}")
             logger.info("cmd.capture.dry_run", tickers=tickers)
             return
-        
-        print(f"\n📋 Found {len(tickers)} ticker(s): {', '.join(tickers)}")
         
         added = watchlist.add(tickers)
         removed = watchlist.prune(cfg.data.max_watch_days)
         
-        print(f"➕ Added to watchlist: {len(added)}")
-        if added:
-            for t in added:
-                print(f"   • {t}")
-        
-        print(f"➖ Removed (expired): {len(removed)}")
-        if removed:
-            for t in removed:
-                print(f"   • {t}")
+        ui.print_summary_box(
+            "Watchlist Changes",
+            added=added,
+            removed=removed
+        )
         
         logger.info("cmd.capture.complete", 
                    captured=len(tickers),
@@ -83,7 +83,7 @@ def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int
         
     except TVScreenerError as e:
         logger.error("cmd.capture.failed", error=str(e))
-        print(f"\n❌ Capture failed: {e}")
+        ui.print_error(f"Capture failed: {e}")
         raise
 
 
@@ -145,7 +145,7 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
         symbols = watchlist.all_symbols()
         
         if not symbols:
-            print("\n⚠️  Watchlist is empty. Run 'capture' command first.")
+            ui.print_warning("Watchlist is empty. Run 'capture' command first.")
             logger.warning("cmd.scan.empty_watchlist")
             return
         
@@ -154,7 +154,10 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                    dry_run=dry_run,
                    parallel=parallel)
         
-        print(f"\n🔍 Scanning {len(symbols)} symbol(s) for Stochastic RSI buy signals...")
+        if dry_run:
+            ui.print_dry_run_banner()
+        
+        ui.print_header("🔍 Signal Scanner", f"Scanning {len(symbols)} symbols for buy signals")
         
         tg = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
         signals = []
@@ -172,19 +175,20 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
         if parallel:
             # Parallel scanning with better concurrency control
             max_workers = min(3, len(symbols))  # Don't spawn more workers than needed
-            print(f"⚡ Using parallel mode ({max_workers} concurrent workers)")
+            ui.print_info(f"Using parallel mode ({max_workers} concurrent workers)")
             
             with ThreadPoolExecutor(max_workers=max_workers) as executor:
                 futures = {executor.submit(_scan_symbol, s, cfg): s for s in symbols}
                 
-                with tqdm(total=len(symbols), desc="Scanning", unit="symbol") as pbar:
+                with ui.create_scan_progress() as progress:
+                    task = progress.add_task("[cyan]Scanning symbols...", total=len(symbols))
+                    
                     for future in as_completed(futures):
                         symbol, has_signal, error = future.result()
                         
                         if error:
                             errors.append((symbol, error))
                             rate_limiter.report_error()
-                            pbar.set_postfix_str(f"⚠️  {symbol}: {error[:30]}")
                         elif has_signal:
                             rate_limiter.report_success()
                             
@@ -197,31 +201,26 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                                     try:
                                         tg.send(msg)
                                         watchlist.mark_signal_sent(symbol)
-                                        pbar.set_postfix_str(f"✅ {symbol} sent & removed")
                                     except Exception as e:
                                         logger.error("telegram.send_failed", symbol=symbol, error=str(e))
-                                        pbar.set_postfix_str(f"❌ {symbol} telegram failed")
-                                else:
-                                    print(f"\n[DRY RUN] {msg}")
-                            else:
-                                pbar.set_postfix_str(f"⏭️ {symbol} grace period active")
                         else:
                             rate_limiter.report_success()
                         
-                        pbar.update(1)
+                        progress.update(task, advance=1)
                         
-                        # Show rate limiter stats periodically
-                        if pbar.n % 5 == 0:
+                        # Update description with rate limiter stats periodically
+                        completed = progress.tasks[0].completed
+                        if completed % 5 == 0:
                             stats = rate_limiter.get_stats()
-                            pbar.set_description(f"Scanning (delay: {stats['current_delay']}s)")
+                            progress.update(task, description=f"[cyan]Scanning (delay: {stats['current_delay']:.1f}s)...")
         else:
             # Sequential scanning with adaptive delays
-            print(f"🐌 Sequential mode (delay: {sleep_between}s between symbols)")
+            ui.print_info(f"Sequential mode (delay: {sleep_between}s between symbols)")
             
-            with tqdm(symbols, desc="Scanning", unit="symbol") as pbar:
-                for i, s in enumerate(pbar, start=1):
-                    pbar.set_postfix_str(f"Checking {s}")
-                    
+            with ui.create_scan_progress() as progress:
+                task = progress.add_task("[cyan]Scanning symbols...", total=len(symbols))
+                
+                for i, s in enumerate(symbols, start=1):
                     # Apply rate limiting
                     rate_limiter.wait()
                     
@@ -230,7 +229,6 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                     if error:
                         errors.append((symbol, error))
                         rate_limiter.report_error()
-                        pbar.set_postfix_str(f"⚠️  {symbol}: {error[:30]}")
                     elif has_signal:
                         rate_limiter.report_success()
                         
@@ -243,42 +241,41 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                                 try:
                                     tg.send(msg)
                                     watchlist.mark_signal_sent(symbol)
-                                    pbar.set_postfix_str(f"✅ {symbol} sent & removed")
                                 except Exception as e:
                                     logger.error("telegram.send_failed", symbol=symbol, error=str(e))
-                                    pbar.set_postfix_str(f"❌ {symbol} telegram failed")
-                            else:
-                                print(f"\n[DRY RUN] {msg}")
-                        else:
-                            pbar.set_postfix_str(f"⏭️ {symbol} grace period active")
                     else:
                         rate_limiter.report_success()
+                    
+                    progress.update(task, advance=1)
                     
                     # Update progress description with rate limit stats
                     if i % 3 == 0:
                         stats = rate_limiter.get_stats()
-                        pbar.set_description(f"Scanning (delay: {stats['current_delay']}s)")
+                        progress.update(task, description=f"[cyan]Scanning (delay: {stats['current_delay']:.1f}s)...")
         
         # Print rate limiter final stats
         final_stats = rate_limiter.get_stats()
-        print(f"\n⚡ Rate Limiter Stats:")
-        print(f"   Final delay: {final_stats['current_delay']}s")
-        print(f"   Success streak: {final_stats['success_streak']}")
-        print(f"   Total errors: {final_stats['error_count']}")
+        ui.print_stats_panel({
+            'Current Delay': f"{final_stats['current_delay']:.2f}s",
+            'Success Streak': final_stats['success_streak'],
+            'Total Errors': final_stats['error_count']
+        })
         
         # Summary
-        print(f"\n✅ Scan complete!")
-        print(f"📊 Buy signals found: {len(signals)}")
-        if signals:
-            for s in signals:
-                print(f"   🎯 {s}")
+        ui.print_success(f"Scan complete! Found {len(signals)} buy signal(s)")
         
-        print(f"❌ Errors: {len(errors)}")
+        if signals:
+            # Show signals in a nice list
+            ui.console.print("\n[bold green]🎯 Buy Signals:[/bold green]")
+            for s in signals:
+                ui.console.print(f"   • [cyan]{s}[/cyan]")
+        
         if errors:
+            ui.console.print(f"\n[bold yellow]⚠️  Errors ({len(errors)}):[/bold yellow]")
             for sym, err in errors[:5]:  # Show first 5 errors
-                print(f"   ⚠️  {sym}: {err}")
+                ui.console.print(f"   • [red]{sym}[/red]: {err[:60]}")
             if len(errors) > 5:
-                print(f"   ... and {len(errors) - 5} more")
+                ui.console.print(f"   [dim]... and {len(errors) - 5} more[/dim]")
         
         logger.info("cmd.scan.complete",
                    signals=len(signals),
@@ -286,82 +283,81 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
         
     except Exception as e:
         logger.error("cmd.scan.failed", error=str(e))
-        print(f"\n❌ Scan failed: {e}")
+        ui.print_error(f"Scan failed: {e}")
         raise
 
-
-def _print_watchlist_summary():
-    """Helper: Print current watchlist summary"""
-    symbols = watchlist.all_symbols()
-    if symbols:
-        print(f"\n📋 Current watchlist ({len(symbols)} symbol(s)):")
-        for s in sorted(symbols):
-            print(f"   • {s}")
-    else:
-        print(f"\n📋 Watchlist is now empty")
 
 
 def cmd_list(cfg: Config):
     """List current watchlist"""
-    symbols = watchlist.all_symbols()
+    wl = watchlist._load()
     
-    if not symbols:
-        print("\n📋 Watchlist is empty")
+    if not wl:
+        ui.print_warning("Watchlist is empty")
         return
     
-    print(f"\n📋 Watchlist ({len(symbols)} symbol(s)):")
-    for s in sorted(symbols):
-        print(f"   • {s}")
+    ui.print_header("📋 Watchlist", f"{len(wl)} symbols")
     
-    print(f"\n⚙️  Settings:")
-    print(f"   Max watch days: {cfg.data.max_watch_days}")
-    print(f"   API provider: {cfg.api.provider}")
+    # Create and print beautiful table
+    table = ui.create_watchlist_table(wl)
+    ui.console.print(table)
+    
+    # Print settings info
+    ui.console.print(f"\n[bold cyan]⚙️  Settings:[/bold cyan]")
+    ui.console.print(f"   Max watch days: [yellow]{cfg.data.max_watch_days}[/yellow]")
+    ui.console.print(f"   API provider: [yellow]{cfg.api.provider}[/yellow]")
 
 
 def cmd_add(cfg: Config, symbols: list[str]):
     """Manually add symbols to watchlist"""
+    ui.print_header("➕ Add Symbols", "Add symbols to watchlist")
+    
     # Validate and sanitize input
     valid_symbols, invalid_symbols = sanitize_symbols(symbols)
     
     if invalid_symbols:
-        print(f"\n⚠️  Invalid symbol format (skipped {len(invalid_symbols)}):")
+        ui.print_warning(f"Invalid symbol format (skipped {len(invalid_symbols)}):")
         for s in invalid_symbols:
-            print(f"   • {s}")
+            ui.console.print(f"   • [red]{s}[/red]")
     
     if not valid_symbols:
-        print(f"\n❌ No valid symbols to add")
+        ui.print_error("No valid symbols to add")
         return
     
-    print(f"\n➕ Adding {len(valid_symbols)} symbol(s) to watchlist...")
+    ui.print_info(f"Adding {len(valid_symbols)} symbol(s)...")
     
     added = watchlist.add(valid_symbols)
     
     if added:
-        print(f"\n✅ Added {len(added)} symbol(s):")
+        ui.print_success(f"Added {len(added)} symbol(s)")
         for s in added:
-            print(f"   • {s}")
+            ui.console.print(f"   • [cyan]{s}[/cyan]")
     else:
-        print(f"\n⚠️  All symbols already in watchlist")
+        ui.print_warning("All symbols already in watchlist")
     
     # Show current watchlist
-    _print_watchlist_summary()
+    symbols = watchlist.all_symbols()
+    if symbols:
+        ui.console.print(f"\n[dim]Current watchlist: {len(symbols)} symbols[/dim]")
 
 
 def cmd_remove(cfg: Config, symbols: list[str]):
     """Manually remove symbols from watchlist"""
+    ui.print_header("➖ Remove Symbols", "Remove symbols from watchlist")
+    
     # Validate and sanitize input
     valid_symbols, invalid_symbols = sanitize_symbols(symbols)
     
     if invalid_symbols:
-        print(f"\n⚠️  Invalid symbol format (skipped {len(invalid_symbols)}):")
+        ui.print_warning(f"Invalid symbol format (skipped {len(invalid_symbols)}):")
         for s in invalid_symbols:
-            print(f"   • {s}")
+            ui.console.print(f"   • [red]{s}[/red]")
     
     if not valid_symbols:
-        print(f"\n❌ No valid symbols to remove")
+        ui.print_error("No valid symbols to remove")
         return
     
-    print(f"\n➖ Removing {len(valid_symbols)} symbol(s) from watchlist...")
+    ui.print_info(f"Removing {len(valid_symbols)} symbol(s)...")
     
     w = watchlist._load()
     removed = []
@@ -377,17 +373,21 @@ def cmd_remove(cfg: Config, symbols: list[str]):
     watchlist._save(w)
     
     if removed:
-        print(f"\n✅ Removed {len(removed)} symbol(s):")
+        ui.print_success(f"Removed {len(removed)} symbol(s)")
         for s in removed:
-            print(f"   • {s}")
+            ui.console.print(f"   • [cyan]{s}[/cyan]")
     
     if not_found:
-        print(f"\n⚠️  Not found in watchlist ({len(not_found)} symbol(s)):")
+        ui.print_warning(f"Not found in watchlist ({len(not_found)} symbols)")
         for s in not_found:
-            print(f"   • {s}")
+            ui.console.print(f"   • [dim]{s}[/dim]")
     
     # Show current watchlist
-    _print_watchlist_summary()
+    symbols_left = watchlist.all_symbols()
+    if symbols_left:
+        ui.console.print(f"\n[dim]Remaining in watchlist: {len(symbols_left)} symbols[/dim]")
+    else:
+        ui.console.print(f"\n[dim]Watchlist is now empty[/dim]")
 
 
 def cmd_clear(cfg: Config):
@@ -395,85 +395,104 @@ def cmd_clear(cfg: Config):
     all_symbols = watchlist.all_symbols()
     
     if not all_symbols:
-        print("\n📋 Watchlist is already empty")
+        ui.print_warning("Watchlist is already empty")
         return
     
-    print(f"\n⚠️  About to remove ALL {len(all_symbols)} symbol(s) from watchlist:")
-    for s in sorted(all_symbols):
-        print(f"   • {s}")
+    ui.print_header("🗑️  Clear Watchlist", f"Remove ALL {len(all_symbols)} symbols")
     
-    response = input("\n❓ Are you sure? (yes/no): ").strip().lower()
+    ui.console.print(f"\n[bold yellow]⚠️  About to remove ALL symbols:[/bold yellow]")
+    for s in sorted(all_symbols)[:10]:  # Show first 10
+        ui.console.print(f"   • [cyan]{s}[/cyan]")
+    if len(all_symbols) > 10:
+        ui.console.print(f"   [dim]... and {len(all_symbols) - 10} more[/dim]")
+    
+    response = ui.console.input("\n[bold]❓ Are you sure? (yes/no):[/bold] ").strip().lower()
     
     if response in ['yes', 'y']:
         watchlist._save({})
-        print(f"\n✅ Watchlist cleared! Removed {len(all_symbols)} symbol(s)")
+        ui.print_success(f"Watchlist cleared! Removed {len(all_symbols)} symbols")
     else:
-        print("\n❌ Cancelled")
+        ui.print_info("Cancelled")
 
 
 def cmd_debug(cfg: Config, symbol: str):
     """Debug a specific symbol - show detailed Stochastic RSI values"""
     try:
-        print(f"\n🔍 Debugging {symbol}...")
+        ui.print_header(f"🔍 Debug: {symbol}", "Detailed Stochastic RSI analysis")
         
         # Get data
+        ui.print_info(f"Fetching data for {symbol}...")
         daily_ohlc_func = get_data_source(cfg.api.provider)
         df = daily_ohlc_func(symbol)
         
         if df is None or len(df) < 30:
-            print(f"❌ Insufficient data for {symbol}")
+            ui.print_error(f"Insufficient data for {symbol}")
             return
         
-        print(f"✅ Got {len(df)} days of data")
+        ui.print_success(f"Got {len(df)} days of data")
         
         # Calculate indicators
         ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
         
-        # Show last 5 rows
-        print(f"\n📊 Last 5 days of Stochastic RSI:")
-        print(ind.tail(5).to_string())
+        # Show last 5 rows in a table
+        from rich.table import Table
+        table = Table(title="📊 Last 5 Days", show_header=True, header_style="bold magenta")
+        table.add_column("Date", style="cyan")
+        table.add_column("RSI", justify="right", style="yellow")
+        table.add_column("K", justify="right", style="blue")
+        table.add_column("D", justify="right", style="blue")
+        
+        for idx, row in ind.tail(5).iterrows():
+            table.add_row(
+                str(idx)[:10],
+                f"{row.rsi:.2f}" if hasattr(row, 'rsi') else "N/A",
+                f"{row.k:.4f}",
+                f"{row.d:.4f}"
+            )
+        
+        ui.console.print(table)
         
         # Check signal
         has_signal = stoch_rsi_buy(ind)
         
-        print(f"\n🎯 Signal Analysis:")
+        ui.console.print(f"\n[bold cyan]🎯 Signal Analysis:[/bold cyan]")
         if len(ind) >= 2:
             prev = ind.iloc[-2]
             last = ind.iloc[-1]
             
-            print(f"   Previous: K={prev.k:.4f}, D={prev.d:.4f}")
-            print(f"   Current:  K={last.k:.4f}, D={last.d:.4f}")
+            ui.console.print(f"   Previous: K=[blue]{prev.k:.4f}[/blue], D=[blue]{prev.d:.4f}[/blue]")
+            ui.console.print(f"   Current:  K=[blue]{last.k:.4f}[/blue], D=[blue]{last.d:.4f}[/blue]")
             
             cross_up = prev.k <= prev.d and last.k > last.d
             oversold = (last.k < 0.2 or last.d < 0.2 or 
                        prev.k < 0.2 or prev.d < 0.2)
             
-            print(f"\n   Cross Up: {'✅ YES' if cross_up else '❌ NO'}")
+            ui.console.print(f"\n   Cross Up: {'[bold green]✅ YES[/bold green]' if cross_up else '[red]❌ NO[/red]'}")
             if cross_up:
-                print(f"      (K crossed from {prev.k:.4f} to {last.k:.4f})")
-                print(f"      (D was {prev.d:.4f}, now {last.d:.4f})")
+                ui.console.print(f"      [dim](K crossed from {prev.k:.4f} to {last.k:.4f})[/dim]")
+                ui.console.print(f"      [dim](D was {prev.d:.4f}, now {last.d:.4f})[/dim]")
             
-            print(f"   Oversold: {'✅ YES' if oversold else '❌ NO'}")
+            ui.console.print(f"   Oversold: {'[bold green]✅ YES[/bold green]' if oversold else '[red]❌ NO[/red]'}")
             if oversold:
                 if last.k < 0.2:
-                    print(f"      Current K ({last.k:.4f}) < 0.2")
+                    ui.console.print(f"      [dim]Current K ({last.k:.4f}) < 0.2[/dim]")
                 if last.d < 0.2:
-                    print(f"      Current D ({last.d:.4f}) < 0.2")
+                    ui.console.print(f"      [dim]Current D ({last.d:.4f}) < 0.2[/dim]")
                 if prev.k < 0.2:
-                    print(f"      Previous K ({prev.k:.4f}) < 0.2")
+                    ui.console.print(f"      [dim]Previous K ({prev.k:.4f}) < 0.2[/dim]")
                 if prev.d < 0.2:
-                    print(f"      Previous D ({prev.d:.4f}) < 0.2")
+                    ui.console.print(f"      [dim]Previous D ({prev.d:.4f}) < 0.2[/dim]")
             
-            print(f"\n   🚀 BUY SIGNAL: {'✅ YES' if has_signal else '❌ NO'}")
+            ui.console.print(f"\n   🚀 BUY SIGNAL: {'[bold green]✅ YES[/bold green]' if has_signal else '[red]❌ NO[/red]'}")
             
             # Grace period check
             if has_signal:
                 can_send = watchlist.can_send_signal(symbol)
-                print(f"   Grace Period: {'✅ Can send' if can_send else '🔇 Recently sent'}")
+                ui.console.print(f"   Grace Period: {'[green]✅ Can send[/green]' if can_send else '[yellow]🔇 Recently sent[/yellow]'}")
         
     except Exception as e:
         logger.exception("cmd.debug.failed", symbol=symbol)
-        print(f"\n❌ Debug failed: {e}")
+        ui.print_error(f"Debug failed: {e}")
 
 
 def cmd_run(cfg: Config, interval: int = 3600, dry_run: bool = False, click_coords: tuple[int, int] = None):
