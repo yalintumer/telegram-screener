@@ -2,6 +2,8 @@ import argparse
 import time
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Callable
+import pandas as pd
 from tqdm import tqdm
 from .config import Config
 from .capture import capture
@@ -11,10 +13,18 @@ from .telegram_client import TelegramClient
 from .indicators import stochastic_rsi, stoch_rsi_buy
 from .logger import logger
 from .exceptions import TVScreenerError, DataSourceError
+from .validation import sanitize_symbols
 
 # Import the correct data source based on config
-def get_data_source(provider: str):
-    """Get the appropriate data source function"""
+def get_data_source(provider: str) -> Callable[[str, int], pd.DataFrame]:
+    """Get the appropriate data source function
+    
+    Args:
+        provider: Data provider name ('yfinance' or 'alphavantage')
+        
+    Returns:
+        Data fetching function that takes (symbol: str, days: int) -> DataFrame
+    """
     if provider == "yfinance":
         from .data_source_yfinance import daily_ohlc
         return daily_ohlc
@@ -80,8 +90,14 @@ def _scan_symbol(symbol: str, cfg: Config) -> tuple[str, bool, str | None]:
     """
     Scan single symbol for buy signal
     
+    Args:
+        symbol: Stock ticker symbol
+        cfg: Application configuration
+    
     Returns:
-        (symbol, has_signal, error_message)
+        tuple of (symbol, has_signal, error_message)
+        - has_signal: True if buy signal detected
+        - error_message: None if successful, error description if failed
     """
     try:
         # Get appropriate data source function
@@ -89,20 +105,32 @@ def _scan_symbol(symbol: str, cfg: Config) -> tuple[str, bool, str | None]:
         df = daily_ohlc_func(symbol)
         
         if df is None or len(df) < 30:
+            logger.warning("scan.insufficient_data", symbol=symbol, rows=len(df) if df is not None else 0)
             return symbol, False, "insufficient data"
         
         ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
         
         if stoch_rsi_buy(ind):
+            logger.info("scan.signal_found", symbol=symbol)
             return symbol, True, None
         
         return symbol, False, None
         
     except DataSourceError as e:
-        return symbol, False, str(e)
+        logger.error("scan.data_source_error", symbol=symbol, error=str(e))
+        return symbol, False, f"data error: {str(e)}"
+    
+    except KeyError as e:
+        logger.error("scan.missing_column", symbol=symbol, column=str(e))
+        return symbol, False, f"missing data column: {str(e)}"
+    
+    except ValueError as e:
+        logger.error("scan.value_error", symbol=symbol, error=str(e))
+        return symbol, False, f"calculation error: {str(e)}"
+        
     except Exception as e:
-        logger.exception("scan.symbol_error", symbol=symbol)
-        return symbol, False, str(e)
+        logger.exception("scan.unexpected_error", symbol=symbol)
+        return symbol, False, f"unexpected: {type(e).__name__}"
 
 
 def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parallel: bool = False):
@@ -222,6 +250,17 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
         raise
 
 
+def _print_watchlist_summary():
+    """Helper: Print current watchlist summary"""
+    symbols = watchlist.all_symbols()
+    if symbols:
+        print(f"\n📋 Current watchlist ({len(symbols)} symbol(s)):")
+        for s in sorted(symbols):
+            print(f"   • {s}")
+    else:
+        print(f"\n📋 Watchlist is now empty")
+
+
 def cmd_list(cfg: Config):
     """List current watchlist"""
     symbols = watchlist.all_symbols()
@@ -241,11 +280,21 @@ def cmd_list(cfg: Config):
 
 def cmd_add(cfg: Config, symbols: list[str]):
     """Manually add symbols to watchlist"""
-    symbols = [s.upper().strip() for s in symbols]
+    # Validate and sanitize input
+    valid_symbols, invalid_symbols = sanitize_symbols(symbols)
     
-    print(f"\n➕ Adding {len(symbols)} symbol(s) to watchlist...")
+    if invalid_symbols:
+        print(f"\n⚠️  Invalid symbol format (skipped {len(invalid_symbols)}):")
+        for s in invalid_symbols:
+            print(f"   • {s}")
     
-    added = watchlist.add(symbols)
+    if not valid_symbols:
+        print(f"\n❌ No valid symbols to add")
+        return
+    
+    print(f"\n➕ Adding {len(valid_symbols)} symbol(s) to watchlist...")
+    
+    added = watchlist.add(valid_symbols)
     
     if added:
         print(f"\n✅ Added {len(added)} symbol(s):")
@@ -255,23 +304,30 @@ def cmd_add(cfg: Config, symbols: list[str]):
         print(f"\n⚠️  All symbols already in watchlist")
     
     # Show current watchlist
-    all_symbols = watchlist.all_symbols()
-    print(f"\n📋 Current watchlist ({len(all_symbols)} symbol(s)):")
-    for s in sorted(all_symbols):
-        print(f"   • {s}")
+    _print_watchlist_summary()
 
 
 def cmd_remove(cfg: Config, symbols: list[str]):
     """Manually remove symbols from watchlist"""
-    symbols = [s.upper().strip() for s in symbols]
+    # Validate and sanitize input
+    valid_symbols, invalid_symbols = sanitize_symbols(symbols)
     
-    print(f"\n➖ Removing {len(symbols)} symbol(s) from watchlist...")
+    if invalid_symbols:
+        print(f"\n⚠️  Invalid symbol format (skipped {len(invalid_symbols)}):")
+        for s in invalid_symbols:
+            print(f"   • {s}")
+    
+    if not valid_symbols:
+        print(f"\n❌ No valid symbols to remove")
+        return
+    
+    print(f"\n➖ Removing {len(valid_symbols)} symbol(s) from watchlist...")
     
     w = watchlist._load()
     removed = []
     not_found = []
     
-    for s in symbols:
+    for s in valid_symbols:
         if s in w:
             del w[s]
             removed.append(s)
@@ -291,13 +347,7 @@ def cmd_remove(cfg: Config, symbols: list[str]):
             print(f"   • {s}")
     
     # Show current watchlist
-    all_symbols = watchlist.all_symbols()
-    if all_symbols:
-        print(f"\n📋 Current watchlist ({len(all_symbols)} symbol(s)):")
-        for s in sorted(all_symbols):
-            print(f"   • {s}")
-    else:
-        print(f"\n📋 Watchlist is now empty")
+    _print_watchlist_summary()
 
 
 def cmd_clear(cfg: Config):
