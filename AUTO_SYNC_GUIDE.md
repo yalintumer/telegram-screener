@@ -1,144 +1,268 @@
-# 🔄 Watchlist Auto-Sync Kurulumu
+# 🎨 Telegram Screener - Modern CLI Kullanımı
 
-## 📦 Kurulum
+> **� Not:** Bu proje artık beautiful UI ve alias sistemi ile modernize edildi!
 
-### 1. Watchdog paketini yükleyin:
+## 🚀 Hızlı Başlangıç
+
+Tüm komutları görmek için:
 ```bash
-pip install watchdog
+tvhelp
 ```
 
-### 2. VM IP adresinizi yapılandırın:
+## 🎨 Local Komutlar (Beautiful UI)
 
-**quick_add.py** ve **auto_sync_watchlist.py** dosyalarını açıp şu satırı düzenleyin:
-```python
-VM_IP = "YOUR_SERVER_IP"  # Örnek: "123.456.789.0"
+### Watchlist Yönetimi
+```bash
+# Watchlist'i göster (güzel tablo ile)
+tvlist
+
+# Sembol ekle
+tvadd AAPL MSFT TSLA
+
+# Sembol çıkar
+tvremove AAPL
+
+# Tüm watchlist'i temizle (onay ister)
+tvclear
 ```
 
-### 3. SSH anahtarını yapılandırın (şifresiz bağlantı için):
+### Tarama ve Analiz
 ```bash
-ssh-copy-id root@YOUR_SERVER_IP
+# Tarama yap (progress bar ile)
+tvscan
+
+# Debug bilgisi göster
+tvdebug AAPL
+
+# Sürekli mod (1 saatte bir tarama)
+tvrun
 ```
 
-## 🚀 Kullanım
-
-### Yöntem 1: Manuel Ekleme + Auto Sync
-
+### Ekran Görüntüsü
 ```bash
-# Sembolleri ekle ve otomatik VM'e gönder
-python3 quick_add.py AAPL MSFT TSLA --sync
-
-# Sadece lokal ekle (VM'e gönderme)
-python3 quick_add.py AAPL MSFT
+# Ekran görüntüsü al ve OCR yap (sadece Mac'te)
+tvcapture
 ```
 
-### Yöntem 2: Otomatik Watchdog (Sürekli İzleme)
+## 🌐 VM Yönetimi
 
-Terminal'i açık tutun, watchlist.json değiştiğinde otomatik sync yapar:
-
+### Service Kontrol
 ```bash
-# Önce watchdog yükle
-pip install watchdog
+# Service durumu
+tvstatus
 
-# Auto-sync'i başlat
-python3 auto_sync_watchlist.py
+# Service başlat
+tvstart
+
+# Service durdur
+tvstop
+
+# Service yeniden başlat
+tvrestart
+
+# Log görüntüle (son 50 satır)
+tvlogs
+
+# Canlı log takibi
+tvlogs-live
+
+# VM'e SSH bağlan
+tvm
 ```
 
-Artık `watchlist.json` her değiştiğinde:
-1. ✅ Otomatik Git commit
-2. ✅ Otomatik Git push
-3. ✅ VM'de otomatik `git pull`
-4. ✅ VM servisini otomatik restart
-
-### Yöntem 3: Arka Planda Çalıştır (tmux/screen ile)
-
+### System Health Check
 ```bash
-# tmux ile
-tmux new -s watchlist-sync
-python3 auto_sync_watchlist.py
-# Ctrl+B, D ile detach
-
-# Geri dönmek için:
-tmux attach -t watchlist-sync
+# Kapsamlı sistem kontrolü
+tvhealth
 ```
 
-## 🎯 Workflow Örnekleri
+Kontrol edilen:
+- ✅ Local watchlist durumu
+- ✅ Config dosyası
+- ✅ Signal history
+- ✅ VM service durumu
+- ✅ VM watchlist karşılaştırma
+- ✅ Git durumu
 
-### Senaryo 1: Hızlı Ekleme
+## 🔄 Sync Komutları
+
+### Otomatik Sync
 ```bash
-python3 quick_add.py AAPL MSFT GOOGL --sync
-# ✅ 3 sembol eklendi ve VM güncellendi
+# Pull + Push + VM güncelle + restart
+tvsync
+
+# Commit + Push + VM güncelle + restart
+tvpush "commit message"
+
+# Sadece git pull
+tvpull
+
+# Local ve VM watchlist'i karşılaştır
+tvcompare
 ```
 
-### Senaryo 2: Watchdog ile Sürekli Sync
+### Manuel Sync Workflow
 ```bash
-# Terminal 1: Auto-sync çalıştır
-python3 auto_sync_watchlist.py
+# 1. Sembolleri ekle
+tvadd AAPL MSFT
 
-# Terminal 2: İstediğiniz gibi düzenleyin
-python3 quick_add.py NVDA AMD
-# veya
-code watchlist.json  # Manuel düzenle
-
-# Her değişiklik otomatik VM'e gider!
-```
-
-### Senaryo 3: Git ile Manuel Kontrol
-```bash
-python3 quick_add.py AAPL MSFT
+# 2. Commit ve push
 git add watchlist.json
 git commit -m "Add tech stocks"
 git push
 
-# VM'de:
-ssh root@YOUR_SERVER_IP
-cd ~/telegram-screener
-git pull
-sudo systemctl restart telegram-screener
+# 3. VM'i güncelle
+ssh root@167.99.252.127 "cd ~/telegram-screener && git pull && sudo systemctl restart telegram-screener.service"
+
+# Veya tek komutla:
+tvsync
+```
+
+## 🔧 Utilities
+
+```bash
+# Proje klasörüne git
+tvcd
+
+# Yardım mesajı
+tvhelp
+```
+
+## 🎯 Workflow Örnekleri
+
+### Senaryo 1: Hızlı Sembol Ekleme ve Tarama
+```bash
+tvadd AAPL MSFT GOOGL
+tvscan
+```
+
+### Senaryo 2: VM'i Güncelleme
+```bash
+# Lokal değişikliklerden sonra:
+tvpush "Add new tech stocks"
+
+# VM durumunu kontrol:
+tvstatus
+tvhealth
+```
+
+### Senaryo 3: Debug ve Analiz
+```bash
+# Watchlist'i göster
+tvlist
+
+# Belirli sembolü debug et
+tvdebug AAPL
+
+# Log'ları izle
+tvlogs-live
+```
+
+### Senaryo 4: Sürekli İzleme
+```bash
+# Local'de sürekli mod
+tvrun
+
+# VM'de zaten çalışıyor (1 saatte bir scan)
+tvstatus
+```
+
+## 📦 Kurulum (Alias Sistemi)
+
+Alias'lar zaten `.zshrc` dosyasına eklendi. Yeni bir terminal açtığınızda otomatik yüklenir.
+
+Manuel yükleme için:
+```bash
+source ~/.zshrc
 ```
 
 ## 🔧 Sorun Giderme
 
-### SSH bağlantısı çalışmıyor:
+### Komutlar çalışmıyor:
 ```bash
-# Test et:
-ssh root@YOUR_SERVER_IP "echo OK"
+# Config'i yeniden yükle
+source ~/.zshrc
 
-# Şifresiz giriş için:
-ssh-copy-id root@YOUR_SERVER_IP
+# Alias'ları kontrol et
+alias | grep tv
 ```
 
-### Watchdog yüklü değil:
+### VM bağlantısı çalışmıyor:
 ```bash
-pip install watchdog
-# veya
-pip3 install watchdog
+# SSH test et
+ssh root@167.99.252.127 "echo OK"
+
+# Şifresiz giriş için (eğer yoksa):
+ssh-copy-id root@167.99.252.127
 ```
 
-### VM güncellenmiyor:
+### Service çalışmıyor:
 ```bash
-# VM'de manuel kontrol:
-ssh root@YOUR_SERVER_IP
-cd ~/telegram-screener
-git pull
-sudo systemctl status telegram-screener
+# Durumu kontrol et
+tvstatus
+
+# Log'ları incele
+tvlogs
+
+# Yeniden başlat
+tvrestart
+
+# Kapsamlı health check
+tvhealth
 ```
 
-## 📝 Notlar
+## 🎨 UI Özellikleri
 
-- Auto-sync her 10 saniyede bir tetiklenir (spam önlemek için)
-- Signal history de otomatik sync edilir
-- VM servisi her sync'te otomatik restart olur
-- Watchdog çalışırken terminal'i kapatmayın veya tmux kullanın
+### Güzel Tablolar
+- 📊 Color-coded age indicators (yeşil < 2 gün, sarı 2-4 gün, kırmızı >= 4 gün)
+- 📋 Bordered headers
+- 🎯 Clear symbol listing
+
+### Progress Bars
+- ⏳ Spinners ile canlı progress
+- 📈 Yüzdelik gösterge
+- ⏱️ Tahmini kalan süre
+
+### Status Messages
+- ✅ Success (yeşil)
+- ❌ Error (kırmızı)
+- ⚠️ Warning (sarı)
+- ℹ️ Info (mavi)
+
+### Panels
+- 📊 İstatistik panelleri
+- 🔍 Debug bilgileri
+- ⚙️ Konfigürasyon bilgileri
+
+## 📝 Environment Variables
+
+Alias sistemi otomatik şu değişkenleri kullanır:
+```bash
+TV_PROJECT="$HOME/Desktop/Telegram Proje"
+TV_VM_IP="167.99.252.127"
+TV_VM_USER="root"
+TV_VM_PATH="~/telegram-screener"
+```
 
 ## 🎉 Özet
 
-**En kolay yöntem:**
+**En sık kullanılan komutlar:**
 ```bash
-python3 quick_add.py AAPL MSFT --sync
+tvlist          # Watchlist'i gör
+tvadd AAPL      # Sembol ekle
+tvscan          # Tarama yap
+tvhealth        # System check
+tvstatus        # VM durumu
+tvsync          # Sync yap
 ```
 
-**En güçlü yöntem:**
+**Yardım:**
 ```bash
-python3 auto_sync_watchlist.py
-# Artık her değişiklik otomatik!
+tvhelp          # Tüm komutlar
 ```
+
+## 🔗 Diğer Dökümanlar
+
+- `QUICKSTART.md` - Hızlı başlangıç rehberi
+- `README.md` - Proje genel bilgisi
+- `CHEATSHEET.txt` - Komut referansı
