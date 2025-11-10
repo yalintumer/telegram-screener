@@ -219,8 +219,9 @@ tvsync
 - `tvcapture` kullan, manuel sync uğraşma
 
 ### 🎯 Grace Period Sistemi
-- Sembol sinyal verince 5 **iş günü** tekrar sinyal vermez
-- Pazartesi sinyal = Cuma'ya kadar grace period
+- Sembol sinyal verince 5 **iş günü** (weekdays) tekrar sinyal vermez
+  - Örnek: Pazartesi sinyal → Pazartesi'ye kadar grace period
+  - Cumartesi/Pazar sayılmaz ❌
 - `tvgrace` ile kontrol et
 
 ### 🔄 Sync Mantığı
@@ -229,8 +230,10 @@ tvsync
 - **VM:** SSH ile otomatik `git pull` + restart yapar
 
 ### 📈 Watchlist Süresi
-- Her sembol **5 iş günü** kalır (Pazartesi-Cuma)
-- Otomatik temizlenir (prune)
+- Her sembol **5 iş günü** (weekdays) kalır
+  - Örnek: Pazartesi eklendi → Pazartesi'ye kadar kalır
+  - Cumartesi/Pazar sayılmaz ❌
+- 5 iş günü sonunda otomatik temizlenir (prune)
 - Manuel çıkarmak için: `tvadd SYMBOL --remove --sync`
 
 ---
