@@ -21,15 +21,18 @@ htmlcov/
 .env
 .env.local
 .env.*
+!.env.example
 apis.env
 config.yaml
 config.yml
+!config.example.yaml
 shots/
 logs/
 
-# Watchlist - VM owns this now (single source of truth)
+# Data files - VM owns these (single source of truth)
 watchlist.json
 signal_history.json
+stats.json
 
 # Deprecated files
 deprecated/

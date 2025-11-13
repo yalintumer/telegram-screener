@@ -13,6 +13,7 @@ from .logger import logger
 from .exceptions import TVScreenerError, DataSourceError
 from .validation import sanitize_symbols
 from .rate_limiter import AdaptiveRateLimiter
+from .health import HealthMonitor
 from . import ui
 
 # Import the correct data source based on config
@@ -20,17 +21,20 @@ def get_data_source(provider: str) -> Callable[[str, int], pd.DataFrame]:
     """Get the appropriate data source function
     
     Args:
-        provider: Data provider name ('yfinance' or 'alphavantage')
+        provider: Data provider name (currently only 'yfinance' is supported)
         
     Returns:
         Data fetching function that takes (symbol: str, days: int) -> DataFrame
+        
+    Raises:
+        ValueError: If unsupported provider is specified
     """
     if provider == "yfinance":
         from .data_source_yfinance import daily_ohlc
         return daily_ohlc
     else:
-        from .data_source import daily_ohlc
-        return daily_ohlc
+        # Only yfinance is supported now - it's free and unlimited
+        raise ValueError(f"Unsupported data provider: {provider}. Only 'yfinance' is supported.")
 
 
 def send_tickers_to_vm(tickers: list[str], cfg: Config) -> tuple[list[str], list[str]]:
@@ -139,6 +143,9 @@ def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int
         
         ui.print_info("Extracting tickers with OCR...")
         tickers = extract_tickers(img, cfg.tesseract.config_str)
+        
+        # Record capture statistics
+        HealthMonitor.record_capture(len(tickers))
         
         # Cleanup screenshot
         try:
@@ -390,6 +397,13 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                    signals=len(signals),
                    errors=len(errors))
         
+        # Record scan statistics
+        HealthMonitor.record_scan(
+            symbols_scanned=len(symbols),
+            signals_found=len(signals),
+            errors=len(errors)
+        )
+        
     except Exception as e:
         logger.error("cmd.scan.failed", error=str(e))
         ui.print_error(f"Scan failed: {e}")
@@ -604,6 +618,76 @@ def cmd_debug(cfg: Config, symbol: str):
         ui.print_error(f"Debug failed: {e}")
 
 
+def cmd_status(cfg: Config):
+    """Show system health and statistics"""
+    ui.print_header("📊 System Status", "Health monitoring and statistics")
+    
+    try:
+        status = HealthMonitor.get_status()
+        
+        # Overall status
+        ui.console.print(f"\n[bold cyan]⚡ System Status:[/bold cyan] ", end="")
+        if status['status'] == 'healthy':
+            ui.console.print("[bold green]✓ Healthy[/bold green]")
+        elif status['status'] == 'idle':
+            ui.console.print("[yellow]○ Idle (empty watchlist)[/yellow]")
+        else:
+            ui.console.print("[red]✗ Unknown[/red]")
+        
+        # Watchlist info
+        wl_info = status['watchlist']
+        ui.console.print(f"\n[bold cyan]📋 Watchlist:[/bold cyan]")
+        ui.console.print(f"   Total Symbols: [yellow]{wl_info['total_symbols']}[/yellow]")
+        
+        if wl_info['total_symbols'] > 0:
+            ui.console.print(f"   Age Distribution:")
+            for age_range, count in wl_info['age_distribution'].items():
+                if count > 0:
+                    ui.console.print(f"      {age_range} days: [cyan]{count}[/cyan] symbol(s)")
+        
+        # Signal history
+        hist_info = status['signal_history']
+        ui.console.print(f"\n[bold cyan]📈 Signal History:[/bold cyan]")
+        ui.console.print(f"   Total Records: [yellow]{hist_info['total_records']}[/yellow]")
+        
+        # Statistics
+        stats = status['stats']
+        if stats:
+            ui.console.print(f"\n[bold cyan]📊 Statistics:[/bold cyan]")
+            
+            if 'last_capture' in stats:
+                last_cap = stats['last_capture']
+                ui.console.print(f"   Last Capture:")
+                ui.console.print(f"      Time: [green]{last_cap['timestamp'][:19]}[/green]")
+                ui.console.print(f"      Symbols: [cyan]{last_cap['symbols_extracted']}[/cyan]")
+            
+            if 'last_scan' in stats:
+                last_scan = stats['last_scan']
+                ui.console.print(f"   Last Scan:")
+                ui.console.print(f"      Time: [green]{last_scan['timestamp'][:19]}[/green]")
+                ui.console.print(f"      Scanned: [cyan]{last_scan['symbols_scanned']}[/cyan]")
+                ui.console.print(f"      Signals: [green]{last_scan['signals_found']}[/green]")
+                ui.console.print(f"      Errors: [red]{last_scan['errors']}[/red]")
+            
+            if 'total_scans' in stats:
+                ui.console.print(f"   Totals:")
+                ui.console.print(f"      Total Scans: [yellow]{stats['total_scans']}[/yellow]")
+                ui.console.print(f"      Total Signals: [green]{stats.get('total_signals', 0)}[/green]")
+                ui.console.print(f"      Total Captures: [yellow]{stats.get('total_captures', 0)}[/yellow]")
+        else:
+            ui.console.print(f"\n[dim]No statistics available yet[/dim]")
+        
+        # Config info
+        ui.console.print(f"\n[bold cyan]⚙️  Configuration:[/bold cyan]")
+        ui.console.print(f"   API Provider: [yellow]{cfg.api.provider}[/yellow]")
+        ui.console.print(f"   Max Watch Days: [yellow]{cfg.data.max_watch_days}[/yellow]")
+        ui.console.print(f"   Log Level: [yellow]{cfg.log_level}[/yellow]")
+        
+    except Exception as e:
+        logger.exception("cmd.status.failed")
+        ui.print_error(f"Status check failed: {e}")
+
+
 def cmd_run(cfg: Config, interval: int = 3600, dry_run: bool = False, click_coords: tuple[int, int] = None):
     """Continuous mode: capture once, then scan periodically"""
     logger.info("cmd.run.start", interval=interval, dry_run=dry_run)
@@ -723,6 +807,10 @@ Examples:
     pdebug.add_argument("symbol", type=str,
                        help="Symbol to debug (e.g., AAPL)")
     
+    # Status command
+    sub.add_parser("status",
+                  help="Show system health and statistics")
+    
     args = parser.parse_args(argv)
     
     try:
@@ -767,6 +855,9 @@ Examples:
         
         elif args.cmd == "debug":
             cmd_debug(cfg, args.symbol.upper())
+        
+        elif args.cmd == "status":
+            cmd_status(cfg)
         
         return 0
         

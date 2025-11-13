@@ -1,0 +1,36 @@
+[Unit]
+Description=Telegram Stock Screener Service
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/telegram-screener
+Environment="PATH=/root/telegram-screener/venv/bin:/usr/local/bin:/usr/bin:/bin"
+
+# Load environment variables
+EnvironmentFile=/root/telegram-screener/.env
+
+# Run the screener in continuous mode (scan every hour)
+ExecStart=/root/telegram-screener/venv/bin/python -m src.main run --interval 3600 --config config.yaml
+
+# Restart policy
+Restart=always
+RestartSec=30
+
+# Resource limits
+MemoryLimit=512M
+CPUQuota=100%
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=telegram-screener
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

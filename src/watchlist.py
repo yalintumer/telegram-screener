@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 from datetime import date, timedelta
+from .logger import logger
+from .exceptions import WatchlistError
 
 PATH = Path("watchlist.json")
 SIGNAL_HISTORY_PATH = Path("signal_history.json")
@@ -9,25 +11,55 @@ HISTORY_RETENTION_DAYS = 30  # Sinyal geçmişini ne kadar süre tutacağız
 
 
 def _load() -> dict:
+    """Load watchlist from JSON file"""
     if not PATH.exists():
         return {}
-    return json.loads(PATH.read_text())
+    try:
+        content = PATH.read_text()
+        if not content.strip():
+            return {}
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        logger.error("watchlist.load.json_error", error=str(e))
+        raise WatchlistError(f"Corrupted watchlist file: {e}", {"path": str(PATH)})
+    except Exception as e:
+        logger.error("watchlist.load.error", error=str(e))
+        raise WatchlistError(f"Failed to load watchlist: {e}", {"path": str(PATH)})
 
 
 def _save(d: dict):
-    PATH.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+    """Save watchlist to JSON file"""
+    try:
+        PATH.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+    except Exception as e:
+        logger.error("watchlist.save.error", error=str(e))
+        raise WatchlistError(f"Failed to save watchlist: {e}", {"path": str(PATH)})
 
 
 def _load_signal_history() -> dict:
     """Load signal history from separate file"""
     if not SIGNAL_HISTORY_PATH.exists():
         return {}
-    return json.loads(SIGNAL_HISTORY_PATH.read_text())
+    try:
+        content = SIGNAL_HISTORY_PATH.read_text()
+        if not content.strip():
+            return {}
+        return json.loads(content)
+    except json.JSONDecodeError as e:
+        logger.error("signal_history.load.json_error", error=str(e))
+        raise WatchlistError(f"Corrupted signal history file: {e}", {"path": str(SIGNAL_HISTORY_PATH)})
+    except Exception as e:
+        logger.error("signal_history.load.error", error=str(e))
+        raise WatchlistError(f"Failed to load signal history: {e}", {"path": str(SIGNAL_HISTORY_PATH)})
 
 
 def _save_signal_history(d: dict):
     """Save signal history to separate file"""
-    SIGNAL_HISTORY_PATH.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+    try:
+        SIGNAL_HISTORY_PATH.write_text(json.dumps(d, indent=2, ensure_ascii=False))
+    except Exception as e:
+        logger.error("signal_history.save.error", error=str(e))
+        raise WatchlistError(f"Failed to save signal history: {e}", {"path": str(SIGNAL_HISTORY_PATH)})
 
 
 def can_add_to_watchlist(symbol: str) -> tuple[bool, str]:
@@ -83,21 +115,34 @@ def add(symbols: list[str], skip_grace_check: bool = False) -> list[str]:
 def _business_days_between(start_date: date, end_date: date) -> int:
     """
     Calculate business days (weekdays) between two dates.
-    INCLUDES start_date, EXCLUDES end_date.
     
-    Example: Monday to Friday = 5 business days (Mon, Tue, Wed, Thu, Fri)
+    Args:
+        start_date: Start date (inclusive in count)
+        end_date: End date (exclusive from count)
+    
+    Returns:
+        Number of weekdays between dates
+        
+    Example:
+        Monday to Friday (same week) = 5 business days
+        Friday to Monday (weekend) = 0 business days
+        
+    Edge cases:
+        - If start_date >= end_date, returns 0
+        - Weekends (Saturday, Sunday) are not counted
     """
     if start_date >= end_date:
         return 0
     
     business_days = 0
     current = start_date
-    # Changed: current < end_date (was correct) but we start from start_date itself
+    
     while current < end_date:
-        # 0 = Monday, 6 = Sunday
+        # 0 = Monday, 4 = Friday, 5 = Saturday, 6 = Sunday
         if current.weekday() < 5:  # Monday to Friday
             business_days += 1
         current += timedelta(days=1)
+    
     return business_days
 
 

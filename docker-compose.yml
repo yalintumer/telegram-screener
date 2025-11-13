@@ -1,0 +1,52 @@
+"""Docker Compose configuration for easy deployment"""
+
+version: '3.8'
+
+services:
+  telegram-screener:
+    build: .
+    container_name: telegram-screener
+    restart: unless-stopped
+    
+    # Mount volumes for persistence
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
+      - ./watchlist.json:/app/watchlist.json
+      - ./signal_history.json:/app/signal_history.json
+      - ./stats.json:/app/stats.json
+      - ./logs:/app/logs
+      - ./shots:/app/shots
+    
+    # Environment variables (override .env or set here)
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    
+    # Resource limits
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    
+    # Health check
+    healthcheck:
+      test: ["CMD", "python", "-m", "src.main", "list"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    
+    # Command override (default: run mode every hour)
+    command: ["python", "-m", "src.main", "run", "--interval", "3600"]
+
+# Optional: Add monitoring/logging services
+#   watchtower:
+#     image: containrrr/watchtower
+#     volumes:
+#       - /var/run/docker.sock:/var/run/docker.sock
+#     command: --interval 300

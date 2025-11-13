@@ -1,10 +1,10 @@
 # 📊 Telegram Stock Screener
 
-> Automated TradingView symbol screening with Stochastic RSI signals via Telegram
+> Production-ready automated TradingView symbol screening with Stochastic RSI signals via Telegram
 
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
-[![Tests](https://img.shields.io/badge/tests-46%20passing-brightgreen.svg)](tests/)
-[![Coverage](https://img.shields.io/badge/coverage-89--95%25-green.svg)](htmlcov/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 ---
 
@@ -13,7 +13,19 @@
 1. **Capture** → Screenshot TradingView screener, extract symbols via OCR
 2. **Scan** → Check Stochastic RSI for buy signals (K crosses D in oversold)
 3. **Alert** → Send Telegram notifications for buy signals
-4. **Repeat** → Runs every hour on cloud VM
+4. **Monitor** → Track system health, statistics, and watchlist status
+5. **Repeat** → Runs continuously in production (Docker/systemd)
+
+## ✨ Features
+
+- 🎯 **Advanced Technical Analysis**: Stochastic RSI with customizable parameters
+- 📸 **Intelligent OCR**: Extracts symbols from TradingView screenshots
+- 🔄 **Grace Period System**: Prevents duplicate signals with business-day tracking
+- 📊 **Health Monitoring**: Built-in status tracking and statistics
+- 🚀 **Production Ready**: Systemd service, Docker support, comprehensive logging
+- 🆓 **Free Data**: Uses yfinance (unlimited, no API key needed)
+- ⚡ **Adaptive Rate Limiting**: Smart delays based on error patterns
+- 🎨 **Beautiful CLI**: Rich terminal UI with progress bars and tables
 
 ## 🚀 Quick Start
 
@@ -29,37 +41,81 @@ pip install -r requirements.txt
 cp .env.example .env
 nano .env  # Add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
 
+cp config.example.yaml config.yaml
+nano config.yaml  # Adjust settings if needed
+
 # Test
-python -m src.main --config config.yaml list
-python -m src.main --config config.yaml scan --dry-run
+python -m src.main add AAPL MSFT GOOGL
+python -m src.main list
+python -m src.main status
+
+# Deploy as Service
+# macOS:
+python deploy_macos.py install
+python deploy_macos.py start
+
+# Linux:
+python deploy_service.py install
+python deploy_service.py start
 ```
 
-## 🛠️ Commands (via aliases)
+## 📚 Documentation
 
-Add to `~/.zshrc`:
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Production deployment guide (systemd, Docker)
+- **[API Documentation](docs/)** - Detailed API and configuration docs
+- **Commands** - See `python -m src.main --help`
+
+## 🎮 Commands
+
+### Core Commands
 ```bash
-source ~/.zshrc  # Reload after adding aliases
+# Capture symbols from TradingView screenshot
+python -m src.main capture
+
+# Scan watchlist for buy signals
+python -m src.main scan
+
+# Continuous mode (capture once, then scan every hour)
+python -m src.main run --interval 3600
+
+# System status and health monitoring
+python -m src.main status
 ```
 
-**Local:**
-- `tvlist` - Show watchlist
-- `tvadd AAPL MSFT` - Add symbols
-- `tvscan` - Scan for signals
-- `tvcapture` - Screenshot + OCR
-- `tvrun` - Continuous mode
+### Watchlist Management
+```bash
+# Show watchlist
+python -m src.main list
 
-**VM:**
-- `tvstatus` - Check VM service
-- `tvlogs` - View logs
-- `tvrestart` - Restart service
-- `tvsync` - Sync local → VM
+# Add symbols manually
+python -m src.main add AAPL MSFT GOOGL
 
-**Utilities:**
-- `tvhealth` - System health check
-- `tvcompare` - Compare local vs VM
-- `tvhelp` - Show all commands
+# Remove symbols
+python -m src.main remove AAPL MSFT
 
-## 📖 How It Works
+# Clear all symbols (with confirmation)
+python -m src.main clear
+
+# Debug specific symbol
+python -m src.main debug AAPL
+```
+
+### Advanced Options
+```bash
+# Dry run (no changes, no messages sent)
+python -m src.main scan --dry-run
+
+# Parallel scanning (faster, but careful with rate limits)
+python -m src.main scan --parallel
+
+# Custom sleep between symbols
+python -m src.main scan --sleep 20
+
+# Click before capture (for window focus)
+python -m src.main capture --click 150,50
+```
+
+## 🏗️ Architecture
 
 ### Signal Detection
 
