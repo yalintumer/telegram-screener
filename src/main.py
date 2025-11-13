@@ -1,6 +1,7 @@
 import argparse
 import time
 import os
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable
 import pandas as pd
@@ -30,6 +31,86 @@ def get_data_source(provider: str) -> Callable[[str, int], pd.DataFrame]:
     else:
         from .data_source import daily_ohlc
         return daily_ohlc
+
+
+def send_tickers_to_vm(tickers: list[str], cfg: Config) -> tuple[list[str], list[str]]:
+    """Send extracted tickers to VM via SSH
+    
+    This function connects to the VM and executes the 'add' command remotely.
+    The VM will handle grace period validation and watchlist updates.
+    
+    Args:
+        tickers: List of ticker symbols to add
+        cfg: Application configuration with vm_ssh settings
+        
+    Returns:
+        Tuple of (added_symbols, skipped_symbols)
+        
+    Raises:
+        TVScreenerError: If SSH connection or remote command fails
+    """
+    if not tickers:
+        return [], []
+    
+    host = cfg.vm_ssh.host
+    user = cfg.vm_ssh.user
+    path = cfg.vm_ssh.project_path
+    
+    # Build SSH command to add tickers on VM
+    # Format: ssh user@host "cd path && ./venv/bin/python -m src.main add SYMBOL1 SYMBOL2 ..."
+    tickers_str = " ".join(tickers)
+    ssh_cmd = [
+        "ssh",
+        f"{user}@{host}",
+        f'cd {path} && ./venv/bin/python -m src.main add {tickers_str}'
+    ]
+    
+    logger.info("vm.send_tickers", tickers=tickers, host=host)
+    
+    try:
+        result = subprocess.run(
+            ssh_cmd,
+            capture_output=True,
+            text=True,
+            timeout=30
+        )
+        
+        if result.returncode != 0:
+            error_msg = result.stderr.strip() or "Unknown error"
+            logger.error("vm.send_failed", error=error_msg)
+            raise TVScreenerError(f"Failed to send tickers to VM: {error_msg}")
+        
+        # Parse output to determine which were added vs skipped
+        # Expected output format from cmd_add includes lines like:
+        # "✓ Added: SYMBOL" or "⊗ Skipped (grace period): SYMBOL"
+        added = []
+        skipped = []
+        for line in result.stdout.splitlines():
+            if "Added:" in line or "✓" in line:
+                # Extract symbol from line
+                for ticker in tickers:
+                    if ticker in line:
+                        added.append(ticker)
+                        break
+            elif "Skipped" in line or "grace period" in line.lower():
+                for ticker in tickers:
+                    if ticker in line:
+                        skipped.append(ticker)
+                        break
+        
+        # If we couldn't parse specific results, assume all were processed
+        if not added and not skipped:
+            added = tickers
+        
+        logger.info("vm.send_complete", added=len(added), skipped=len(skipped))
+        return added, skipped
+        
+    except subprocess.TimeoutExpired:
+        logger.error("vm.send_timeout")
+        raise TVScreenerError("SSH command timed out after 30 seconds")
+    except Exception as e:
+        logger.error("vm.send_exception", error=str(e))
+        raise TVScreenerError(f"Failed to connect to VM: {e}")
 
 
 def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int] = None):
@@ -69,21 +150,20 @@ def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int
             logger.info("cmd.capture.dry_run", tickers=tickers)
             return
         
-        # Local Mac: Skip grace period check - just send tickers to VM
-        # VM will handle grace period validation when it processes them
-        added = watchlist.add(tickers, skip_grace_check=True)
-        removed = watchlist.prune(cfg.data.max_watch_days)
+        # Send tickers to VM via SSH - VM owns watchlist and handles grace periods
+        ui.print_info("Sending tickers to VM...")
+        added, skipped = send_tickers_to_vm(tickers, cfg)
         
         ui.print_summary_box(
-            "Watchlist Changes",
+            "Tickers Sent to VM",
             added=added,
-            removed=removed
+            skipped=skipped if skipped else []
         )
         
         logger.info("cmd.capture.complete", 
                    captured=len(tickers),
                    added=len(added),
-                   removed=len(removed))
+                   skipped=len(skipped))
         
     except TVScreenerError as e:
         logger.error("cmd.capture.failed", error=str(e))

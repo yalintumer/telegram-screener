@@ -27,6 +27,10 @@ config.yml
 shots/
 logs/
 
+# Watchlist - VM owns this now (single source of truth)
+watchlist.json
+signal_history.json
+
 # Deprecated files
 deprecated/
 *.code-workspace
