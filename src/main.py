@@ -663,8 +663,8 @@ Examples:
   %(prog)s capture --dry-run          # Test mode (no changes)
         """
     )
-    parser.add_argument("--config", default="config.example.yaml", 
-                       help="Config file path (default: config.example.yaml)")
+    parser.add_argument("--config", default="config.yaml", 
+                       help="Config file path (default: config.yaml)")
     parser.add_argument("--dry-run", action="store_true",
                        help="Dry run mode - no actual changes or messages sent")
     
