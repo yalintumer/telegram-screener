@@ -51,12 +51,20 @@ class TesseractConfig(BaseModel):
     config_str: str = "--psm 6"
 
 
+class VMSSHConfig(BaseModel):
+    """VM SSH configuration for sending tickers to remote VM"""
+    host: str = Field(..., description="VM hostname or IP address")
+    user: str = Field(..., description="SSH username")
+    project_path: str = Field(..., description="Path to telegram-screener project on VM")
+
+
 class Config(BaseModel):
     telegram: TelegramConfig
     api: APIConfig
     data: DataConfig
     screen: ScreenConfig
     tesseract: TesseractConfig = Field(default_factory=TesseractConfig)
+    vm_ssh: Optional[VMSSHConfig] = Field(default=None, description="VM SSH config (optional)")
     log_level: str = Field(default="INFO")
 
     @classmethod

@@ -47,10 +47,13 @@ def send_tickers_to_vm(tickers: list[str], cfg: Config) -> tuple[list[str], list
         Tuple of (added_symbols, skipped_symbols)
         
     Raises:
-        TVScreenerError: If SSH connection or remote command fails
+        TVScreenerError: If SSH connection or remote command fails or vm_ssh not configured
     """
     if not tickers:
         return [], []
+    
+    if not cfg.vm_ssh:
+        raise TVScreenerError("vm_ssh not configured in config.yaml - cannot send tickers to VM")
     
     host = cfg.vm_ssh.host
     user = cfg.vm_ssh.user
