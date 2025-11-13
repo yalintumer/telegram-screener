@@ -5,3 +5,6 @@
 
 CPNG
 CRH
+AAPL
+TSLA
+NVDA
