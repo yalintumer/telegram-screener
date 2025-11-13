@@ -157,11 +157,13 @@ def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int
         ui.print_info("Sending tickers to VM...")
         added, skipped = send_tickers_to_vm(tickers, cfg)
         
-        ui.print_summary_box(
-            "Tickers Sent to VM",
-            added=added,
-            skipped=skipped if skipped else []
-        )
+        # Show results
+        if added:
+            ui.print_success(f"✅ Sent to VM: {', '.join(added)}")
+        if skipped:
+            ui.print_warning(f"⏭️  Skipped (grace period): {', '.join(skipped)}")
+        if not added and not skipped:
+            ui.print_info("No tickers processed")
         
         logger.info("cmd.capture.complete", 
                    captured=len(tickers),
