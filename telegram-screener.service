@@ -14,7 +14,7 @@ EnvironmentFile=/root/telegram-screener/.env
 
 # Scan watchlist periodically (no capture, no GUI needed)
 # Symbols should be added manually via 'add' command or from local machine
-ExecStart=/root/telegram-screener/venv/bin/python3 -m src.main scan --sleep-between 15
+ExecStart=/root/telegram-screener/venv/bin/python3 -m src.main scan --sleep 15
 
 # Restart policy
 Restart=always
