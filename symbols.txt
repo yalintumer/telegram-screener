@@ -1,5 +1,7 @@
 # Watchlist Symbols
 # One symbol per line
 # Lines starting with # are ignored
-# Updated automatically by local capture tool
+# Last updated: 2025-11-13 21:49:21
 
+CPNG
+CRH
