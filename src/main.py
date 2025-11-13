@@ -69,7 +69,9 @@ def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int
             logger.info("cmd.capture.dry_run", tickers=tickers)
             return
         
-        added = watchlist.add(tickers)
+        # Local Mac: Skip grace period check - just send tickers to VM
+        # VM will handle grace period validation when it processes them
+        added = watchlist.add(tickers, skip_grace_check=True)
         removed = watchlist.prune(cfg.data.max_watch_days)
         
         ui.print_summary_box(
@@ -144,15 +146,37 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
         if removed > 0:
             logger.info("signal_history.cleanup", removed_count=removed)
         
-        symbols = watchlist.all_symbols()
+        # Get all symbols from watchlist
+        all_symbols = watchlist.all_symbols()
         
-        if not symbols:
+        if not all_symbols:
             ui.print_warning("Watchlist is empty. Run 'capture' command first.")
             logger.warning("cmd.scan.empty_watchlist")
             return
         
+        # Filter out symbols in grace period (VM-side filtering)
+        symbols = []
+        filtered_count = 0
+        for symbol in all_symbols:
+            can_send, reason = watchlist.can_send_signal_with_reason(symbol)
+            if can_send:
+                symbols.append(symbol)
+            else:
+                logger.info("scan.grace_period_skip", symbol=symbol, reason=reason)
+                filtered_count += 1
+        
+        if filtered_count > 0:
+            ui.print_info(f"⏰ Skipped {filtered_count} symbol(s) in grace period")
+        
+        if not symbols:
+            ui.print_warning("All symbols are in grace period. Nothing to scan.")
+            logger.warning("cmd.scan.all_in_grace_period", total=len(all_symbols))
+            return
+        
         logger.info("cmd.scan.start",
-                   symbol_count=len(symbols),
+                   total_symbols=len(all_symbols),
+                   scannable_symbols=len(symbols),
+                   filtered=filtered_count,
                    dry_run=dry_run,
                    parallel=parallel)
         
@@ -194,17 +218,16 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                         elif has_signal:
                             rate_limiter.report_success()
                             
-                            # Check grace period before sending
-                            if watchlist.can_send_signal(symbol):
-                                signals.append(symbol)
-                                msg = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
-                                
-                                if not dry_run:
-                                    try:
-                                        tg.send(msg)
-                                        watchlist.mark_signal_sent(symbol)
-                                    except Exception as e:
-                                        logger.error("telegram.send_failed", symbol=symbol, error=str(e))
+                            # No need to check grace period - already filtered at scan start
+                            signals.append(symbol)
+                            msg = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
+                            
+                            if not dry_run:
+                                try:
+                                    tg.send(msg)
+                                    watchlist.mark_signal_sent(symbol)
+                                except Exception as e:
+                                    logger.error("telegram.send_failed", symbol=symbol, error=str(e))
                         else:
                             rate_limiter.report_success()
                         
@@ -234,17 +257,16 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
                     elif has_signal:
                         rate_limiter.report_success()
                         
-                        # Check grace period before sending
-                        if watchlist.can_send_signal(symbol):
-                            signals.append(symbol)
-                            msg = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
-                            
-                            if not dry_run:
-                                try:
-                                    tg.send(msg)
-                                    watchlist.mark_signal_sent(symbol)
-                                except Exception as e:
-                                    logger.error("telegram.send_failed", symbol=symbol, error=str(e))
+                        # No need to check grace period - already filtered at scan start
+                        signals.append(symbol)
+                        msg = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
+                        
+                        if not dry_run:
+                            try:
+                                tg.send(msg)
+                                watchlist.mark_signal_sent(symbol)
+                            except Exception as e:
+                                logger.error("telegram.send_failed", symbol=symbol, error=str(e))
                     else:
                         rate_limiter.report_success()
                     

@@ -50,15 +50,29 @@ def can_add_to_watchlist(symbol: str) -> tuple[bool, str]:
     return False, f"Grace period active ({remaining} business days remaining)"
 
 
-def add(symbols: list[str]) -> list[str]:
+def add(symbols: list[str], skip_grace_check: bool = False) -> list[str]:
+    """
+    Add symbols to watchlist
+    
+    Args:
+        symbols: List of ticker symbols to add
+        skip_grace_check: If True, skip grace period validation (used when adding from local Mac)
+                         If False, enforce grace period (used when VM processes signals)
+    
+    Returns:
+        List of symbols that were actually added
+    """
     w = _load()
     today = date.today().isoformat()
     added = []
     for s in symbols:
-        can_add, reason = can_add_to_watchlist(s)
-        if not can_add:
-            print(f"⚠️  {s}: {reason}")
-            continue
+        # Only check grace period if not skipped
+        if not skip_grace_check:
+            can_add, reason = can_add_to_watchlist(s)
+            if not can_add:
+                print(f"⚠️  {s}: {reason}")
+                continue
+        
         if s not in w:
             w[s] = {"added": today}
             added.append(s)
@@ -143,9 +157,49 @@ def remove_symbol(symbol: str) -> bool:
 
 
 def can_send_signal(symbol: str) -> bool:
-    """Check if symbol is in watchlist (always returns True if in list since we remove after signal)"""
+    """
+    Check if we can send a signal for this symbol (respects grace period).
+    Used by scan logic to filter symbols before processing.
+    
+    Returns True if:
+    1. Symbol is in watchlist, AND
+    2. Either no previous signal OR grace period has expired
+    """
     w = _load()
-    return symbol in w  # Basit kontrol: listede varsa sinyal gönder
+    if symbol not in w:
+        return False
+    
+    history = _load_signal_history()
+    if symbol not in history:
+        return True  # No previous signal, can send
+    
+    last_signal = date.fromisoformat(history[symbol]["last_signal"])
+    business_days_since = _business_days_between(last_signal, date.today())
+    
+    return business_days_since >= GRACE_PERIOD_DAYS
+
+
+def can_send_signal_with_reason(symbol: str) -> tuple[bool, str]:
+    """
+    Check if we can send a signal with detailed reason.
+    Returns (can_send: bool, reason: str)
+    """
+    w = _load()
+    if symbol not in w:
+        return False, "Not in watchlist"
+    
+    history = _load_signal_history()
+    if symbol not in history:
+        return True, "No previous signal"
+    
+    last_signal = date.fromisoformat(history[symbol]["last_signal"])
+    business_days_since = _business_days_between(last_signal, date.today())
+    
+    if business_days_since >= GRACE_PERIOD_DAYS:
+        return True, f"Grace period expired ({business_days_since} days since last signal)"
+    
+    remaining = GRACE_PERIOD_DAYS - business_days_since
+    return False, f"Grace period active ({remaining} business days remaining)"
 
 
 def cleanup_old_signals(retention_days: int = HISTORY_RETENTION_DAYS) -> int:
