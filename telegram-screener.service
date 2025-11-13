@@ -12,8 +12,9 @@ Environment="PATH=/root/telegram-screener/venv/bin:/usr/local/bin:/usr/bin:/bin"
 # Load environment variables
 EnvironmentFile=/root/telegram-screener/.env
 
-# Run the screener in continuous mode (scan every hour)
-ExecStart=/root/telegram-screener/venv/bin/python3 -m src.main run --interval 3600
+# Scan watchlist periodically (no capture, no GUI needed)
+# Symbols should be added manually via 'add' command or from local machine
+ExecStart=/root/telegram-screener/venv/bin/python3 -m src.main scan --sleep-between 15
 
 # Restart policy
 Restart=always
