@@ -12,13 +12,16 @@ __pycache__/
 dist/
 build/
 
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
 # Project specific - HASSAS BİLGİLER!
 .env
 .env.local
 .env.*
 apis.env
-# watchlist.json  # Commented out - needed for sync between Mac and VM
-# signal_history.json  # Commented out - needed for sync
 config.yaml
 config.yml
 shots/
@@ -26,6 +29,7 @@ logs/
 
 # Deprecated files
 deprecated/
+*.code-workspace
 
 # macOS
 .DS_Store
