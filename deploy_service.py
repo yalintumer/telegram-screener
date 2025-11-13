@@ -1,9 +1,8 @@
+#!/usr/bin/env python3
 """
 Quick deployment script for production VM
 Handles system service installation and management
 """
-
-#!/usr/bin/env python3
 
 import subprocess
 import sys
@@ -80,15 +79,17 @@ def logs_service():
 def main():
     if len(sys.argv) < 2:
         print("""
-Telegram Screener Service Manager
+Telegram Screener Service Manager (Linux/systemd)
 
 Usage:
-    python deploy_service.py install   - Install systemd service
-    python deploy_service.py start     - Start service
-    python deploy_service.py stop      - Stop service
-    python deploy_service.py restart   - Restart service
-    python deploy_service.py status    - Check status
-    python deploy_service.py logs      - View logs
+    python3 deploy_service.py install   - Install systemd service
+    python3 deploy_service.py start     - Start service
+    python3 deploy_service.py stop      - Stop service
+    python3 deploy_service.py restart   - Restart service
+    python3 deploy_service.py status    - Check status
+    python3 deploy_service.py logs      - View logs
+
+Note: Requires systemd (Linux only). For macOS, use deploy_macos.py
         """)
         sys.exit(1)
     
@@ -98,7 +99,7 @@ Usage:
         install_service()
         print("\n💡 Next steps:")
         print("   1. Configure .env file with your credentials")
-        print("   2. Run: python deploy_service.py start")
+        print("   2. Run: python3 deploy_service.py start")
     elif command == "start":
         start_service()
     elif command == "stop":
