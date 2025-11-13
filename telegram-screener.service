@@ -13,7 +13,7 @@ Environment="PATH=/root/telegram-screener/venv/bin:/usr/local/bin:/usr/bin:/bin"
 EnvironmentFile=/root/telegram-screener/.env
 
 # Run the screener in continuous mode (scan every hour)
-ExecStart=/root/telegram-screener/venv/bin/tv-ocr-screener run --interval 3600 --config config.yaml
+ExecStart=/root/telegram-screener/venv/bin/python3 -m src.main run --interval 3600
 
 # Restart policy
 Restart=always
