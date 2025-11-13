@@ -1,486 +1,759 @@
-# 📊 TV OCR Screener — Telegram Bot
+# 📊 Telegram Stock Screener - Complete Documentation
 
-**TradingView Screener** ekranlarından OCR ile ticker sembolleri çıkarıp, **Stokastik RSI** sinyal tespiti yapan ve **Telegram** üzerinden bildirim gönderen otomatik screener botu.
+> **Modern, Beautiful, Production-Ready Stock Screener with Telegram Alerts**
 
-⚠️ **Önemli Uyarı**: Bu proje, TradingView web/uygulama arayüzünü ekran görüntüsü ile otomatik okumaya dayanır. Kullanım Koşulları ihlali riski vardır. Eğitim amaçlıdır; kullanımdan doğacak sorumluluk size aittir.
-
----
-
-## � GÜVENLİK UYARISI
-
-**⚠️ API Anahtarlarınızı ASLA paylaşmayın veya Git'e commit etmeyin!**
-
-- ✅ `.env` dosyanızı kullanın (`.gitignore`'da zaten var)
-- ✅ `config.yaml` dosyasını `.gitignore`'a ekleyin veya placeholder değerler kullanın
-- ✅ GitHub'a push yapmadan önce hassas bilgileri kontrol edin
-- ❌ ASLA gerçek API anahtarlarını kod deposuna yüklemeyin
-
-**Eğer yanlışlıkla API anahtarlarınızı paylaştıysanız:**
-1. Hemen yeni Telegram bot token alın (@BotFather)
-2. Yeni API anahtarları oluşturun (AlphaVantage)
-3. Eski anahtarları iptal edin
-4. Git geçmişini temizlemeyi düşünün (`git filter-branch` veya BFG Repo Cleaner)
+[![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
+[![Tests](https://img.shields.io/badge/tests-46%20passed-brightgreen.svg)](tests/)
+[![Coverage](https://img.shields.io/badge/coverage-89--95%25-green.svg)](htmlcov/)
+[![Rich UI](https://img.shields.io/badge/UI-rich%20library-purple.svg)](https://rich.readthedocs.io/)
 
 ---
 
-## �📚 Dokümantasyon
+## 🎯 What is This?
 
-- 📖 **[QUICKSTART.md](QUICKSTART.md)** — Adım adım başlangıç kılavuzu
-- 📋 **[CHEATSHEET.txt](CHEATSHEET.txt)** — Hızlı komut referansı (yazdır!)
-- 📘 **[README.md](README.md)** — Detaylı teknik döküman (bu dosya)
-
----
-
-## ✨ Özellikler
-
-- 📸 **Otomatik ekran görüntüsü** + gelişmiş OCR preprocessing
-- 🔍 **Ticker çıkarma** — akıllı filtreleme ve validasyon
-- 📊 **Stokastik RSI** sinyal tespiti (günlük)
-- 📱 **Telegram bildirimleri** — anında AL sinyali
-- ⏱️ **Grace period** — sinyal verilen semboller 5 gün tekrar eklenemez
-- 🧹 **Otomatik temizlik** — 30 gün+ eski sinyal kayıtları silinir
-- 🖱️ **Pencere odaklama** — macOS PyAutoGUI ile TradingView'a otomatik tıklama
-- 🚀 **Startup agent** — Mac açıldığında otomatik kontrol (hafta içi, 16 saat+)
-- 🔄 **Otomatik retry** mekanizması (API ve Telegram)
-- ⚡ **Paralel tarama** (opsiyonel, hızlı)
-- 📝 **Yapısal loglama** — dosya + konsol
-- 🧪 **Dry-run modu** — test için
-- 🎯 **Progress bar** — görsel ilerleme takibi
-- ⚙️ **Pydantic validasyon** — güvenli config
-- 🌐 **yfinance desteği** — ücretsiz, limitsiz veri
+An **automated stock screener** that:
+1. 📸 **Captures** TradingView screener screenshots (OCR)
+2. 📊 **Scans** symbols using Stochastic RSI indicator
+3. 🚀 **Sends** buy signals to Telegram
+4. 🌐 **Runs** continuously on a cloud VM (Ubuntu)
+5. 🎨 **Beautiful UI** with tables, progress bars, and colors
 
 ---
 
-## 🚀 Kurulum
+## 🚀 Quick Start (5 Minutes)
 
-### 1. Tesseract OCR Kur (macOS)
-
+### 1. Clone & Setup
 ```bash
-brew install tesseract
-```
-
-### 2. Python Sanal Ortamı Oluştur
-
-```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 3. Konfigürasyon Ayarla
-
-**Yöntem A: Config dosyası** (önerilen)
-```bash
-cp config.example.yaml config.yaml
-# config.yaml dosyasını düzenle
-```
-
-**Yöntem B: Environment değişkenleri**
-```bash
-cp .env.example .env
-# .env dosyasını düzenle
-```
-
-#### Gerekli ayarlar:
-
-1. **Telegram Bot Token** — [@BotFather](https://t.me/BotFather)'dan al
-2. **Telegram Chat ID** — [@userinfobot](https://t.me/userinfobot)'dan öğren
-3. **AlphaVantage API Key** — [alphavantage.co](https://www.alphavantage.co/support/#api-key)'dan ücretsiz al
-4. **Screen Region** — TradingView Screener tablosu koordinatları `[left, top, width, height]`
-
-#### Screen Region nasıl bulunur?
-
-1. TradingView Screener'ı aç (tam ekran değil, pencere modunda)
-2. Screener tablosunu ortalarda konumlandır
-3. macOS'ta **Cmd+Shift+4** ile screenshot aracını aç
-4. Fareyle screener tablosunun sol üst köşesine tıkla
-5. Koordinatları not et (örn: `100, 150`)
-6. Sağ alt köşeye kadar sürükle, boyutları not et (örn: `900 x 600`)
-7. `config.yaml` içinde `screen.region: [100, 150, 900, 600]` olarak ayarla
-
----
-
-## 📖 Kullanım
-
-### Temel Komutlar
-
-#### 📸 Capture — Screenshot al ve watchlist güncelle
-```bash
-python -m src.main capture
-```
-
-#### 🔍 Scan — Watchlist'i tara ve sinyal bul
-```bash
-python -m src.main scan
-```
-
-#### 📋 List — Watchlist'i göster
-```bash
-python -m src.main list
-```
-
-#### 🔄 Run — Sürekli mod (capture + periyodik scan)
-```bash
-python -m src.main run --interval 3600
-```
-
-#### ➕ Add — Manuel sembol ekle
-```bash
-python -m src.main add AAPL MSFT TSLA
-```
-
-#### ➖ Remove — Sembol kaldır
-```bash
-python -m src.main remove AAPL
-```
-
-#### 🧹 Clear — Tüm listeyi temizle
-```bash
-python -m src.main clear
-```
-
-#### 🔍 Debug — Sembol analizi (K/D değerleri)
-```bash
-python -m src.main debug AAPL
-```
-
----
-
-### Gelişmiş Kullanım
-
-#### Özel config dosyası
-```bash
-python -m src.main --config my_config.yaml capture
-```
-
-#### Test modu (hiçbir değişiklik yapmaz)
-```bash
-python -m src.main capture --dry-run
-python -m src.main scan --dry-run
-```
-
-#### Paralel tarama (3x daha hızlı, rate limit riski)
-```bash
-python -m src.main scan --parallel
-```
-
-#### Özel bekleme süresi (rate limit için)
-```bash
-python -m src.main scan --sleep 20
-```
-
-#### 2 saatte bir otomatik tarama
-```bash
-python -m src.main run --interval 7200
-```
-
-#### Yardım
-```bash
-python -m src.main --help
-python -m src.main scan --help
-```
-
----
-
-## ⚙️ Yapılandırma
-
-### Environment Variables (.env)
-
-**Önerilen yöntem**: Hassas bilgiler için `.env` dosyası kullanın:
-
-```bash
-# .env.example'dan kopyala
-cp .env.example .env
-
-# .env dosyasını düzenle
-nano .env
-```
-
-**Örnek `.env` içeriği:**
-
-```bash
-# Telegram Bot Configuration
-TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
-TELEGRAM_CHAT_ID=987654321
-
-# API Configuration
-API_PROVIDER=yfinance
-API_TOKEN=YOUR_ALPHAVANTAGE_KEY  # yfinance için gerekli değil
-RATE_LIMIT_PER_MINUTE=5
-
-# Server Deployment (Opsiyonel - quick_add.py için)
-VM_IP=YOUR_SERVER_IP
-VM_USER=root
-VM_PATH=~/telegram-screener
-
-# Logging
-LOG_LEVEL=INFO
-```
-
-⚠️ **Önemli**: `.env` dosyası `.gitignore`'da olmalı (zaten ekli). ASLA Git'e commit etmeyin!
-
-### config.yaml örneği (Alternatif)
-
-```yaml
-telegram:
-  bot_token: "123456:ABC-DEF..."
-  chat_id: "987654321"
-
-api:
-  provider: "alphavantage"
-  token: "YOUR_KEY"
-  rate_limit_per_minute: 5
-
-data:
-  max_watch_days: 5
-
-screen:
-  region: [100, 150, 900, 600]
-
-tesseract:
-  path: ""  # Boş bırak (otomatik) veya custom path
-  lang: "eng"
-  config_str: "--psm 6"
-
-log_level: "INFO"
-```
-
-### Tesseract ayarları
-
-- `--psm 6` — Düzenli metin bloğu (önerilen)
-- `--psm 11` — Seyrek metin
-- `--psm 3` — Tam otomatik (varsayılan)
-
----
-
-## 🤖 Otomasyon (Cron)
-
-BIST kapanış sonrası her gün (18:10) çalıştır:
-
-```bash
-crontab -e
-```
-
-Ekle:
-```cron
-10 18 * * 1-5 cd /Users/<kullanici>/Telegram\ Proje && /Users/<kullanici>/Telegram\ Proje/venv/bin/python -m src.main run --interval 3600 >> logs/cron.log 2>&1
-```
-
-Veya **launchd** ile (macOS önerilen):
-
-`~/Library/LaunchAgents/com.tvscreener.plist`:
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>Label</key>
-    <string>com.tvscreener</string>
-    <key>ProgramArguments</key>
-    <array>
-        <string>/Users/KULLANICI/Telegram Proje/venv/bin/python</string>
-        <string>-m</string>
-        <string>src.main</string>
-        <string>run</string>
-        <string>--interval</string>
-        <string>3600</string>
-    </array>
-    <key>WorkingDirectory</key>
-    <string>/Users/KULLANICI/Telegram Proje</string>
-    <key>StartCalendarInterval</key>
-    <dict>
-        <key>Hour</key>
-        <integer>18</integer>
-        <key>Minute</key>
-        <integer>10</integer>
-        <key>Weekday</key>
-        <integer>1</integer>
-    </dict>
-</dict>
-</plist>
-```
-
-Yükle:
-```bash
-launchctl load ~/Library/LaunchAgents/com.tvscreener.plist
-```
-
----
-
-## 🐛 Sorun Giderme
-
-### OCR doğruluğu düşük
-
-**Çözümler:**
-- ✅ Ekran ölçeğini **%100** yap (macOS: Sistem Ayarları → Ekranlar)
-- ✅ **Aydınlık tema** kullan (dark mode OCR için zor)
-- ✅ `screen.region` koordinatlarını hassas ayarla
-- ✅ Tesseract config değiştir: `config_str: "--psm 11"`
-- ✅ Font boyutunu artır (TradingView ayarlarından)
-
-### API Rate Limit
-
-**Çözümler:**
-- ✅ `--sleep 20` ile bekleme süresini artır
-- ✅ `config.yaml` içinde `rate_limit_per_minute: 3` düşür
-- ✅ Paralel modu (`--parallel`) kullanma
-- ✅ AlphaVantage Premium üyelik al
-
-### Telegram mesaj gitmiyor
-
-**Kontroller:**
-- ✅ Bot token doğru mu? (BotFather'dan kontrol et)
-- ✅ Chat ID doğru mu? (@userinfobot ile tekrar al)
-- ✅ Bot'a en az bir kez `/start` yazdın mı?
-- ✅ `.env` dosyası doğru yükleniyor mu?
-
-Test komutu:
-```bash
-python -c "from src.telegram_client import TelegramClient; from src.config import Config; cfg=Config.load(); TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id).send('Test mesajı')"
-```
-
-### Capture hataları
-
-**Çözümler:**
-- ✅ TradingView tam ekranda olmasın (pencere modunda)
-- ✅ Region koordinatları ekran dışına taşmasın
-- ✅ Screenshot izni var mı? (macOS: Sistem Ayarları → Gizlilik → Ekran Kaydı)
-
----
-
-## 📁 Proje Yapısı
-
-```
-.
-├── src/                    # Ana uygulama paketi
-│   ├── __init__.py
-│   ├── main.py            # CLI entry point
-│   ├── config.py          # Pydantic config + validation
-│   ├── logger.py          # Logging setup
-│   ├── exceptions.py      # Custom exception'lar
-│   ├── capture.py         # Screenshot (mss)
-│   ├── ocr.py            # OCR + preprocessing
-│   ├── indicators.py      # RSI / Stoch RSI
-│   ├── watchlist.py       # JSON watchlist manager
-│   ├── telegram_client.py # Telegram API
-│   └── data_source.py     # AlphaVantage API
-├── config.example.yaml    # Örnek config
-├── .env.example          # Örnek env dosyası
-├── requirements.txt       # Python dependencies
-├── README.md             # Bu dosya
-├── .gitignore
-└── logs/                 # Otomatik oluşur
-    └── screener_YYYYMMDD.log
-```
-
----
-
-## 🔒 Güvenlik
-
-- ✅ API key'leri **asla** Git'e commit etme
-- ✅ `.env` ve `config.yaml` `.gitignore`'da
-- ✅ `chmod 600 .env` ile dosya iznini sınırla
-- ✅ Production'da `.env.example` kullanma
-
----
-
-## 🧪 Test
-
-```bash
-# Tüm testler
-pytest
-
-# Coverage ile
-pytest --cov=src --cov-report=html
-
-# Belirli test
-pytest tests/test_indicators.py -v
-```
-
----
-
-## 🚀 Deployment (DigitalOcean)
-
-### VM Kurulumu
-
-```bash
-# 1. Ubuntu 22.04 droplet oluştur ($4/mo Basic)
-# 2. SSH key ile bağlan
-ssh -i ~/.ssh/key root@YOUR_IP
-
-# 3. Proje'yi klonla
-cd /root
-git clone https://github.com/KULLANICI_ADI/telegram-screener.git
+cd ~/Desktop
+git clone https://github.com/yalintumer/telegram-screener.git
 cd telegram-screener
 
-# 4. Python ve dependencies kur
-apt update && apt install -y python3-pip python3-venv
-python3 -m venv venv
+# Create virtual environment
+python3.13 -m venv venv
+source venv/bin/activate  # Mac/Linux
+# or: venv\Scripts\activate  # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 2. Configure
+```bash
+# Copy example config
+cp config.yaml.example config.yaml
+
+# Edit with your credentials
+# - Telegram Bot Token (@BotFather)
+# - Telegram Chat ID
+# - VM credentials (optional)
+nano config.yaml
+```
+
+### 3. Test
+```bash
+# View watchlist (beautiful table)
+python -m src.main --config config.yaml list
+
+# Scan for signals (dry-run)
+python -m src.main --config config.yaml scan --dry-run
+
+# Add symbols manually
+python -m src.main --config config.yaml add AAPL MSFT GOOGL
+```
+
+---
+
+## 📋 Features
+
+### 🎨 **Beautiful Terminal UI**
+- ✅ Color-coded tables with age indicators
+- ✅ Progress bars with spinners and ETA
+- ✅ Bordered panels and styled headers
+- ✅ Rich error messages and warnings
+
+### 📊 **Smart Screening**
+- ✅ Stochastic RSI buy signal detection
+- ✅ Grace period (5 business days) prevents spam
+- ✅ Adaptive rate limiting (0.5s - 5s)
+- ✅ Parallel scanning (optional, 3 workers)
+- ✅ Automatic symbol pruning (5 business days)
+
+### 🌐 **Cloud VM Integration**
+- ✅ Systemd service (auto-restart)
+- ✅ Hourly scans (24/7 monitoring)
+- ✅ Git-based deployment
+- ✅ SSH automation
+
+### 🧪 **Testing & Quality**
+- ✅ 46 unit tests (all passing)
+- ✅ 89-95% code coverage
+- ✅ Type hints throughout
+- ✅ Input validation & error handling
+
+---
+
+## 🛠️ CLI Commands (TV Aliases)
+
+All commands available via simple `tv*` aliases:
+
+### 📊 **Watchlist Management**
+```bash
+tvlist                    # Show watchlist (beautiful table)
+tvadd AAPL MSFT          # Add symbols
+tvremove AAPL            # Remove symbols
+tvclear                  # Clear entire watchlist
+tvcapture                # Screenshot + OCR + sync
+```
+
+### 🔍 **Scanning & Analysis**
+```bash
+tvscan                   # Scan for signals (with progress bar)
+tvdebug AAPL            # Debug single symbol
+tvrun                    # Continuous mode (capture + scan loop)
+```
+
+### 🌐 **VM Management**
+```bash
+tvm                      # SSH to VM
+tvstatus                 # Service status
+tvlogs                   # Last 50 log lines
+tvlogs-live             # Live log stream (Ctrl+C to exit)
+tvstart                  # Start service
+tvstop                   # Stop service
+tvrestart               # Restart service
+```
+
+### 🔄 **Sync & Git**
+```bash
+tvsync                   # Full sync (pull + push + VM restart)
+tvpush                   # Commit + push + VM update
+tvpull                   # Git pull
+tvcompare               # Compare local vs VM watchlist
+```
+
+### 🔧 **Utilities**
+```bash
+tvhealth                # System health check
+tvcd                    # Change to project directory
+tvhelp                  # Show all commands
+```
+
+---
+
+## 📖 How It Works
+
+### 🎯 **Architecture**
+
+```
+┌─────────────┐     Git Push      ┌──────────────┐
+│  Local Mac  │ ──────────────────> │   GitHub     │
+│             │                     │              │
+│ - Screenshot│                     │ Repository   │
+│ - OCR       │                     └──────┬───────┘
+│ - UI        │                            │
+└─────────────┘                            │ Git Pull
+                                           │
+                                           ▼
+                                    ┌──────────────┐
+                                    │  VM (Ubuntu) │
+                                    │              │
+                                    │ - Scan every │
+                                    │   1 hour     │
+                                    │ - Send alerts│
+                                    └──────┬───────┘
+                                           │
+                                           ▼
+                                    ┌──────────────┐
+                                    │  Telegram    │
+                                    │  🚀 Signals  │
+                                    └──────────────┘
+```
+
+### 🔍 **Signal Detection Logic**
+
+**Stochastic RSI Buy Signal:**
+1. Calculate RSI (14 periods)
+2. Calculate Stochastic of RSI (14 periods)
+3. K line = 3-day SMA of Stochastic
+4. D line = 3-day SMA of K line
+5. **Signal = K crosses above D in oversold zone (< 20)**
+
+**Example:**
+```
+Stoch RSI
+100 |                    
+ 80 |                    
+ 60 |                    
+ 40 |              D ----
+ 20 |        K ---/      ← K crosses D (BUY SIGNAL! 🚀)
+  0 |___________/________
+     Day: -3  -2  -1  0
+```
+
+### ⏰ **Grace Period System**
+
+**Problem:** Same symbol keeps triggering signals
+
+**Solution:** After sending signal, symbol goes into "grace period" for **5 business days**
+
+**How it works:**
+```
+Monday    → AAPL signal sent 🚀
+            AAPL removed from watchlist
+            signal_history.json: {"AAPL": {"last_signal": "2025-11-13"}}
+
+Tuesday   → User captures AAPL again from TradingView
+            Local: Added to watchlist (no check)
+            VM: Filters out AAPL (grace period active - 4 days left)
+
+...
+
+Next Monday → Grace period expired (5 business days)
+              AAPL can be scanned and signaled again
+```
+
+**Key Points:**
+- ✅ Grace period uses **business days** (weekends don't count)
+- ✅ Filtering happens **on VM** before scanning
+- ✅ Local Mac just sends raw tickers (no grace check)
+- ✅ Signal history stored in `signal_history.json`
+
+---
+
+## 📂 Project Structure
+
+```
+telegram-screener/
+├── src/                          # Main source code
+│   ├── main.py                   # CLI commands (cmd_scan, cmd_capture, etc.)
+│   ├── watchlist.py              # Watchlist & grace period logic
+│   ├── indicators.py             # Stochastic RSI calculations
+│   ├── telegram_client.py        # Telegram API wrapper
+│   ├── rate_limiter.py           # Adaptive rate limiting
+│   ├── ui.py                     # Rich UI components (NEW!)
+│   ├── validation.py             # Input validation
+│   ├── config.py                 # Pydantic config models
+│   ├── logger.py                 # Structured logging
+│   ├── capture.py                # Screenshot capture (Mac only)
+│   ├── ocr.py                    # Tesseract OCR
+│   └── data_source_yfinance.py   # yfinance data fetcher
+│
+├── tests/                        # Unit tests (46 tests)
+│   ├── test_indicators.py
+│   ├── test_rate_limiter.py
+│   └── test_validation.py
+│
+├── deploy/                       # VM deployment scripts
+│   ├── deploy.sh
+│   ├── oracle_setup.sh
+│   └── quick_install.sh
+│
+├── watchlist.json                # Active watchlist
+├── signal_history.json           # Signal tracking
+├── config.yaml                   # Configuration
+├── requirements.txt              # Python dependencies
+├── tvhealth.py                   # Health check script
+└── README.md                     # This file
+```
+
+---
+
+## ⚙️ Configuration
+
+### `config.yaml` Structure
+
+```yaml
+api:
+  provider: "yfinance"           # Data source (yfinance or alphavantage)
+  alpha_vantage_key: ""          # Optional: AlphaVantage key
+
+telegram:
+  bot_token: "YOUR_BOT_TOKEN"    # From @BotFather
+  chat_id: "YOUR_CHAT_ID"        # Your Telegram chat ID
+
+data:
+  max_watch_days: 5              # Auto-remove after 5 business days
+
+screen:
+  region: [0, 200, 165, 645]     # Screenshot region (Mac)
+  app_name: "TradingView"        # App to focus
+
+tesseract:
+  path: "/opt/homebrew/bin/tesseract"  # Tesseract binary
+  lang: "eng"                    # OCR language
+  config_str: "--psm 6"          # Tesseract config
+
+logging:
+  level: "INFO"                  # DEBUG, INFO, WARNING, ERROR
+  file: "logs/screener.log"      # Log file path
+```
+
+---
+
+## 🎨 UI Examples
+
+### Beautiful Watchlist Table
+```
+╭────────────────────────────────────────────────────────────╮
+│                                                            │
+│                       📋 Watchlist                         │
+│                         3 symbols                          │
+│                                                            │
+╰────────────────────────────────────────────────────────────╯
+                  📋 Watchlist                   
+┏━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━━━━━━━━┓
+┃    # ┃ Symbol     ┃ Added Date   ┃   Days Ago ┃
+┡━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━━━━━━━━┩
+│    1 │ AAPL       │ 2025-11-13   │         0d │  ← Green (fresh)
+├──────┼────────────┼──────────────┼────────────┤
+│    2 │ MSFT       │ 2025-11-11   │         2d │  ← Yellow (mid)
+├──────┼────────────┼──────────────┼────────────┤
+│    3 │ GOOGL      │ 2025-11-08   │         5d │  ← Red (old)
+└──────┴────────────┴──────────────┴────────────┘
+```
+
+### Scan Progress with Stats
+```
+╭─────────────────────────────────────────────────────────────╮
+│                                                             │
+│                    🔍 Signal Scanner                        │
+│              Scanning 10 symbols for buy signals           │
+│                                                             │
+╰─────────────────────────────────────────────────────────────╯
+
+ℹ  Sequential mode (delay: 15s between symbols)
+
+Scanning (delay: 1.2s)... ━━━━━━━╸━━━━━━━━━━ 40% 0:00:12
+
+╭─ 📊 Statistics ──────────────────────────────────────────╮
+│                                                          │
+│  Current Delay: 1.20s                                    │
+│  Success Streak: 8                                       │
+│  Total Errors: 1                                         │
+│                                                          │
+╰──────────────────────────────────────────────────────────╯
+
+✓ Scan complete! Found 2 buy signal(s)
+  🚀 AAPL
+  🚀 TSLA
+```
+
+---
+
+## 🧪 Testing
+
+### Run All Tests
+```bash
+pytest tests/ -v
+```
+
+### With Coverage Report
+```bash
+pytest tests/ --cov=src --cov-report=html
+open htmlcov/index.html
+```
+
+### Test Results
+```
+46 tests passed ✅
+Coverage:
+  - indicators.py:   94%
+  - rate_limiter.py: 89%
+  - validation.py:   95%
+```
+
+---
+
+## 🌐 VM Deployment
+
+### Automatic Setup (Recommended)
+```bash
+# On your Mac
+cd deploy/
+./quick_install.sh
+```
+
+This will:
+1. Create Ubuntu VM (DigitalOcean/Oracle)
+2. Install Python 3.13 + dependencies
+3. Setup systemd service
+4. Configure auto-start
+5. Setup SSH keys
+
+### Manual Deployment
+```bash
+# 1. SSH to VM
+ssh root@YOUR_VM_IP
+
+# 2. Clone repo
+git clone https://github.com/yalintumer/telegram-screener.git
+cd telegram-screener
+
+# 3. Setup Python
+python3.13 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
-# 5. Config ayarla (api_provider: yfinance kullan)
+# 4. Configure
+cp config.yaml.example config.yaml
 nano config.yaml
 
-# 6. Systemd service kur
-sudo systemctl enable /root/telegram-screener/telegram-screener.service
-sudo systemctl start telegram-screener
-sudo systemctl status telegram-screener
+# 5. Create systemd service
+sudo nano /etc/systemd/system/telegram-screener.service
 ```
 
-### macOS Otomasyonu
+**Service File (`/etc/systemd/system/telegram-screener.service`):**
+```ini
+[Unit]
+Description=Telegram Stock Screener Bot (Scan Only)
+After=network.target
 
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/telegram-screener
+ExecStart=/root/telegram-screener/run_scan_only.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+```
+
+**Run Script (`run_scan_only.sh`):**
 ```bash
-# LaunchAgent'lar zaten kurulu - kontrol et:
-launchctl list | grep watchlist
+#!/bin/bash
+set -e
 
-# Manuel watchlist güncelleme:
-cd '/Users/KULLANICI_ADI/Desktop/Telegram Proje'
-./auto_update_watchlist.sh
+cd "$(dirname "$0")"
+source venv/bin/activate
 
-# Startup agent test:
-./startup_update_watchlist.sh
+while true; do
+    echo "🔍 Starting scan cycle at $(date)"
+    python -m src.main --config config.yaml scan
+    
+    echo "⏳ Waiting 3600 seconds (1 hour) before next scan..."
+    sleep 3600
+done
 ```
 
-**Otomatik Çalışma:**
-- 🕐 **Zamanlanmış**: 10:00, 18:00, 22:00, 00:00 (Pazartesi-Cuma)
-- 🚀 **Startup**: Mac açıldığında (hafta içi, 16+ saat güncelleme yoksa)
-- ☁️ **VM**: Saatte 1 scan (7/24)
+**Enable and Start:**
+```bash
+chmod +x run_scan_only.sh
+sudo systemctl daemon-reload
+sudo systemctl enable telegram-screener.service
+sudo systemctl start telegram-screener.service
+sudo systemctl status telegram-screener.service
+```
 
 ---
 
-## 🤝 Katkıda Bulunma
+## 🔧 Troubleshooting
 
-1. Fork'la
-2. Feature branch oluştur (`git checkout -b feature/amazing`)
-3. Commit (`git commit -m 'Add amazing feature'`)
-4. Push (`git push origin feature/amazing`)
-5. Pull Request aç
+### Check System Health
+```bash
+tvhealth
+```
+
+**Output:**
+```
+╭─────────────────────────────────────────╮
+│     🏥 System Health Check              │
+╰─────────────────────────────────────────╯
+
+📍 Local Status:
+   ✅ Watchlist: 3 symbols
+   ✅ config.yaml exists
+   📊 Signal history: 5 signals
+
+🌐 VM Status:
+   ✅ Service: Running
+   ✅ VM Watchlist: 3 symbols
+
+📊 Git Status:
+   ✅ No uncommitted changes
+```
+
+### Common Issues
+
+#### 1. **JSON Parse Error**
+```bash
+# Error: Illegal trailing comma
+# Fix: Remove trailing comma in watchlist.json
+tvlist  # Will show error
+```
+
+#### 2. **VM Out of Sync**
+```bash
+# Reset VM to match GitHub
+ssh root@YOUR_VM_IP
+cd ~/telegram-screener
+git reset --hard origin/main
+sudo systemctl restart telegram-screener.service
+```
+
+#### 3. **Grace Period Not Working**
+```bash
+# Check signal history
+cat signal_history.json
+
+# Force add symbol (skip grace check)
+# Note: Local capture already skips grace check
+tvcapture
+```
+
+#### 4. **Service Not Running**
+```bash
+# Check logs
+tvlogs
+
+# Check status
+tvstatus
+
+# Restart
+tvrestart
+```
+
+#### 5. **API Rate Limiting**
+```bash
+# Adaptive rate limiter will automatically slow down
+# Check current delay in scan progress
+tvscan  # Shows "delay: X.Xs" in progress bar
+```
 
 ---
 
-## 📝 Lisans
+## 📊 Usage Scenarios
 
-MIT
+### Scenario 1: Daily Morning Routine
+```bash
+# 1. Check VM status
+tvstatus
+
+# 2. View current watchlist
+tvlist
+
+# 3. Capture new symbols from TradingView
+tvcapture
+
+# 4. Check for immediate signals (dry-run)
+tvscan --dry-run
+
+# 5. Sync to VM
+tvsync
+```
+
+### Scenario 2: Debug Single Symbol
+```bash
+# Show last 5 days of data + indicators
+tvdebug AAPL
+
+# Example output:
+# Last 5 Days:
+# Date       | Close  | RSI  | K    | D    | Signal
+# 2025-11-13 | 150.25 | 45.2 | 0.18 | 0.22 | NO
+# 2025-11-12 | 148.50 | 42.1 | 0.22 | 0.25 | YES ← K crossed D
+```
+
+### Scenario 3: Monitor VM Logs Live
+```bash
+# Start live log stream
+tvlogs-live
+
+# Output will show:
+# Nov 13 12:00:00 - 🔍 Starting scan cycle
+# Nov 13 12:00:05 - ⏰ Skipped 1 symbol in grace period
+# Nov 13 12:00:10 - Scanning AAPL...
+# Nov 13 12:00:12 - 🚀 Signal! AAPL
+# Nov 13 12:00:15 - ✓ Scan complete! Found 1 signal(s)
+```
+
+### Scenario 4: Emergency Stop
+```bash
+# Stop service immediately
+tvstop
+
+# Remove all symbols
+tvclear
+
+# Push to VM
+tvsync
+
+# Restart when ready
+tvstart
+```
 
 ---
 
-## ⚖️ Yasal Uyarı
+## 🔐 Security Best Practices
 
-Bu proje **eğitim amaçlıdır**. TradingView kullanım koşullarını ihlal edebilir. Otomatik trading kararları için kullanılmamalıdır. Finansal kayıplardan sorumluluk kabul edilmez. Kullanım tamamen kendi sorumluluğunuzdadır.
+### ⚠️ **NEVER Commit Secrets!**
+
+**Sensitive Files (already in `.gitignore`):**
+- ✅ `config.yaml` - Contains bot token and API keys
+- ✅ `.env` - Environment variables
+- ✅ `watchlist.json` - May contain private trading data
+- ✅ `signal_history.json` - Trading history
+- ✅ `logs/` - May contain sensitive data
+
+### ✅ **Safe Configuration**
+
+**Option 1: Environment Variables**
+```bash
+# .env file (not committed)
+TELEGRAM_BOT_TOKEN=123456:ABCdef...
+TELEGRAM_CHAT_ID=987654321
+
+# Load in config
+import os
+bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+```
+
+**Option 2: Config Template**
+```yaml
+# config.yaml.example (committed)
+telegram:
+  bot_token: "YOUR_BOT_TOKEN_HERE"
+  chat_id: "YOUR_CHAT_ID_HERE"
+
+# config.yaml (not committed)
+telegram:
+  bot_token: "123456:ABCdef..."
+  chat_id: "987654321"
+```
+
+### 🔒 **If You Leaked Secrets**
+
+1. **Immediately revoke old tokens:**
+   - Telegram: @BotFather → /revoke
+   - AlphaVantage: Generate new key
+
+2. **Generate new credentials**
+
+3. **Clean Git history:**
+```bash
+# Install BFG Repo Cleaner
+brew install bfg
+
+# Remove sensitive file from history
+bfg --delete-files config.yaml
+
+# Force push (WARNING: Rewrites history)
+git push --force
+```
 
 ---
 
-## 🙏 Teşekkürler
+## 📚 Additional Resources
 
-- [pytesseract](https://github.com/madmaze/pytesseract)
-- [mss](https://github.com/BoboTiG/python-mss)
-- [pydantic](https://docs.pydantic.dev/)
-- [tenacity](https://tenacity.readthedocs.io/)
-- [tqdm](https://tqdm.github.io/)
+### Documentation Files
+- `QUICKSTART.md` - Step-by-step setup guide
+- `QUICK_COMMANDS.md` - Command reference
+- `AUTO_SYNC_GUIDE.md` - Sync workflow details
+- `CODE_REVIEW_REPORT.md` - Code quality analysis
+- `SECURITY.md` - Security guidelines
+- `deploy/README.md` - VM deployment guide
+
+### External Links
+- [yfinance Documentation](https://pypi.org/project/yfinance/)
+- [Rich Library Docs](https://rich.readthedocs.io/)
+- [Telegram Bot API](https://core.telegram.org/bots/api)
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract)
 
 ---
 
-**Made with ❤️ for algorithmic trading enthusiasts**
+## 🤝 Contributing
 
+### Development Setup
+```bash
+# Install dev dependencies
+pip install -r requirements.txt
+pip install pytest pytest-cov black mypy
+
+# Format code
+black src/ tests/
+
+# Type check
+mypy src/
+
+# Run tests
+pytest tests/ -v --cov=src
+```
+
+### Commit Message Format
+```
+Type: Brief description
+
+- Detailed change 1
+- Detailed change 2
+
+Examples:
+  Feature: Add grace period filtering to VM
+  Fix: Correct JSON trailing comma validation
+  Docs: Update README with new UI examples
+  Test: Add rate limiter edge case tests
+  Refactor: Move grace period logic to VM-side
+```
+
+---
+
+## 📄 License
+
+MIT License - See LICENSE file for details
+
+---
+
+## 🙏 Credits
+
+**Built with:**
+- [Rich](https://github.com/Textualize/rich) - Beautiful terminal formatting
+- [yfinance](https://github.com/ranaroussi/yfinance) - Yahoo Finance data
+- [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) - Telegram API
+- [Tesseract OCR](https://github.com/tesseract-ocr/tesseract) - Text recognition
+- [pytest](https://docs.pytest.org/) - Testing framework
+- [Pydantic](https://docs.pydantic.dev/) - Data validation
+
+---
+
+## 📞 Support
+
+**Need Help?**
+
+1. Check `tvhealth` for system status
+2. Review logs: `tvlogs`
+3. Read troubleshooting section above
+4. Check GitHub Issues
+5. Review test coverage: `pytest --cov`
+
+---
+
+## 🎯 Roadmap
+
+### ✅ Completed
+- Beautiful UI with Rich library
+- Comprehensive test suite (46 tests)
+- VM-side grace period filtering
+- Adaptive rate limiting
+- Environment variable support
+- Health check system
+- Alias command system
+
+### 🔄 In Progress
+- Paper trading integration
+- Binance trading bot (separate project)
+- Backtesting framework
+
+### 📋 Planned
+- Web dashboard
+- Mobile app notifications
+- Multi-exchange support
+- Machine learning signal optimization
+- Real-time data streaming
+
+---
+
+**Happy Trading! 🚀📈**
+
+*Remember: This is for educational purposes. Always do your own research before making investment decisions.*
