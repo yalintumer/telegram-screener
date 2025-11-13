@@ -37,6 +37,77 @@ def get_data_source(provider: str) -> Callable[[str, int], pd.DataFrame]:
         raise ValueError(f"Unsupported data provider: {provider}. Only 'yfinance' is supported.")
 
 
+def save_and_commit_symbols(tickers: list[str]) -> None:
+    """Save symbols to file and auto-commit to git
+    
+    Saves extracted symbols to symbols.txt and commits to git.
+    The VM scanner will pull and read this file automatically.
+    
+    Args:
+        tickers: List of ticker symbols to save
+        
+    Raises:
+        TVScreenerError: If git operations fail
+    """
+    if not tickers:
+        return
+    
+    try:
+        # Get project root (where .git is)
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        symbols_file = os.path.join(project_root, "symbols.txt")
+        
+        # Read existing symbols to merge
+        existing = set()
+        if os.path.exists(symbols_file):
+            with open(symbols_file, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        existing.add(line)
+        
+        # Merge new symbols
+        all_symbols = sorted(existing.union(set(tickers)))
+        
+        # Write updated file
+        with open(symbols_file, "w") as f:
+            f.write("# Watchlist Symbols\n")
+            f.write("# One symbol per line\n")
+            f.write("# Lines starting with # are ignored\n")
+            f.write(f"# Last updated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            for symbol in all_symbols:
+                f.write(f"{symbol}\n")
+        
+        logger.info("symbols.saved", count=len(all_symbols), new=len(tickers))
+        
+        # Git add, commit, push
+        subprocess.run(["git", "add", "symbols.txt"], cwd=project_root, check=True)
+        
+        commit_msg = f"Add {len(tickers)} symbol(s): {', '.join(tickers)}"
+        result = subprocess.run(
+            ["git", "commit", "-m", commit_msg],
+            cwd=project_root,
+            capture_output=True,
+            text=True
+        )
+        
+        # Check if there were changes to commit
+        if result.returncode == 0:
+            subprocess.run(["git", "push"], cwd=project_root, check=True)
+            logger.info("symbols.committed_and_pushed", symbols=tickers)
+        elif "nothing to commit" in result.stdout.lower():
+            logger.info("symbols.no_changes", message="Symbols already in file")
+        else:
+            raise TVScreenerError(f"Git commit failed: {result.stderr}")
+            
+    except subprocess.CalledProcessError as e:
+        logger.error("symbols.git_failed", error=str(e))
+        raise TVScreenerError(f"Failed to commit symbols: {e}")
+    except Exception as e:
+        logger.error("symbols.save_failed", error=str(e))
+        raise TVScreenerError(f"Failed to save symbols: {e}")
+
+
 def send_tickers_to_vm(tickers: list[str], cfg: Config) -> tuple[list[str], list[str]]:
     """Send extracted tickers to VM via SSH
     
@@ -160,22 +231,12 @@ def cmd_capture(cfg: Config, dry_run: bool = False, click_coords: tuple[int, int
             logger.info("cmd.capture.dry_run", tickers=tickers)
             return
         
-        # Send tickers to VM via SSH - VM owns watchlist and handles grace periods
-        ui.print_info("Sending tickers to VM...")
-        added, skipped = send_tickers_to_vm(tickers, cfg)
+        # Save symbols and push to git (VM will pull automatically)
+        ui.print_info("Saving symbols and pushing to git...")
+        save_and_commit_symbols(tickers)
+        ui.print_success(f"✅ Committed {len(tickers)} symbol(s) to git. VM will sync automatically.")
         
-        # Show results
-        if added:
-            ui.print_success(f"✅ Sent to VM: {', '.join(added)}")
-        if skipped:
-            ui.print_warning(f"⏭️  Skipped (grace period): {', '.join(skipped)}")
-        if not added and not skipped:
-            ui.print_info("No tickers processed")
-        
-        logger.info("cmd.capture.complete", 
-                   captured=len(tickers),
-                   added=len(added),
-                   skipped=len(skipped))
+        logger.info("cmd.capture.complete", captured=len(tickers))
         
     except TVScreenerError as e:
         logger.error("cmd.capture.failed", error=str(e))
@@ -230,20 +291,63 @@ def _scan_symbol(symbol: str, cfg: Config) -> tuple[str, bool, str | None]:
         return symbol, False, f"unexpected: {type(e).__name__}"
 
 
+def read_symbols_from_file() -> list[str]:
+    """Read symbols from symbols.txt file
+    
+    Returns:
+        List of ticker symbols (empty list if file doesn't exist or is empty)
+    """
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        symbols_file = os.path.join(project_root, "symbols.txt")
+        
+        if not os.path.exists(symbols_file):
+            logger.warning("symbols.file_not_found", path=symbols_file)
+            return []
+        
+        symbols = []
+        with open(symbols_file, "r") as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    symbols.append(line)
+        
+        logger.info("symbols.loaded", count=len(symbols))
+        return symbols
+        
+    except Exception as e:
+        logger.error("symbols.read_failed", error=str(e))
+        return []
+
+
 def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parallel: bool = False):
     """Scan watchlist symbols for buy signals with adaptive rate limiting"""
     try:
+        # Pull latest symbols from git
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        try:
+            subprocess.run(["git", "pull"], cwd=project_root, check=True, capture_output=True)
+            logger.info("symbols.git_pull_success")
+        except Exception as e:
+            logger.warning("symbols.git_pull_failed", error=str(e))
+            # Continue anyway - use whatever we have locally
+        
+        # Read symbols from file (primary source)
+        all_symbols = read_symbols_from_file()
+        
+        # Fallback: if file is empty, try watchlist database
+        if not all_symbols:
+            logger.info("symbols.fallback_to_watchlist")
+            all_symbols = watchlist.all_symbols()
+        
         # Clean up old signal history records (30+ days)
         removed = watchlist.cleanup_old_signals()
         if removed > 0:
             logger.info("signal_history.cleanup", removed_count=removed)
         
-        # Get all symbols from watchlist
-        all_symbols = watchlist.all_symbols()
-        
         if not all_symbols:
-            ui.print_warning("Watchlist is empty. Run 'capture' command first.")
-            logger.warning("cmd.scan.empty_watchlist")
+            ui.print_warning("No symbols found. Add symbols via 'capture' command or manually edit symbols.txt")
+            logger.warning("cmd.scan.no_symbols")
             return
         
         # Filter out symbols in grace period (VM-side filtering)

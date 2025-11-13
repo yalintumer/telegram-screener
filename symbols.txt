@@ -1,0 +1,5 @@
+# Watchlist Symbols
+# One symbol per line
+# Lines starting with # are ignored
+# Updated automatically by local capture tool
+
