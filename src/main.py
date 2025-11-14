@@ -333,12 +333,17 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
             # Continue anyway - use whatever we have locally
         
         # Read symbols from file (primary source)
-        all_symbols = read_symbols_from_file()
+        file_symbols = read_symbols_from_file()
         
-        # Fallback: if file is empty, try watchlist database
-        if not all_symbols:
-            logger.info("symbols.fallback_to_watchlist")
-            all_symbols = watchlist.all_symbols()
+        # Sync file symbols to watchlist (so grace period tracking works)
+        if file_symbols:
+            for symbol in file_symbols:
+                if symbol not in watchlist.all_symbols():
+                    watchlist.add(symbol)
+                    logger.info("watchlist.auto_add", symbol=symbol)
+        
+        # Get all symbols from watchlist (now includes file symbols)
+        all_symbols = watchlist.all_symbols()
         
         # Clean up old signal history records (30+ days)
         removed = watchlist.cleanup_old_signals()
