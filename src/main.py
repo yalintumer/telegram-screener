@@ -338,6 +338,10 @@ def cmd_scan(cfg: Config, sleep_between: int = 15, dry_run: bool = False, parall
         # Sync file symbols to watchlist (so grace period tracking works)
         if file_symbols:
             for symbol in file_symbols:
+                # Skip invalid symbols (too short, non-alpha)
+                if len(symbol) < 2 or not symbol.isalpha():
+                    logger.warning("watchlist.invalid_symbol_skipped", symbol=symbol)
+                    continue
                 if symbol not in watchlist.all_symbols():
                     watchlist.add(symbol)
                     logger.info("watchlist.auto_add", symbol=symbol)
