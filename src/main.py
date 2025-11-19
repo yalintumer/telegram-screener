@@ -46,14 +46,18 @@ def run_scan(cfg: Config):
     """Main scan loop - fetch from Notion, check signals, send to Telegram"""
     
     # Initialize clients
-    notion = NotionClient(cfg.notion.api_token, cfg.notion.database_id)
+    notion = NotionClient(
+        cfg.notion.api_token, 
+        cfg.notion.database_id,
+        cfg.notion.signals_database_id
+    )
     telegram = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
     
     logger.info("scan_started")
     
     # Fetch watchlist from Notion
     logger.info("fetching_watchlist_from_notion")
-    symbols = notion.get_watchlist()
+    symbols, symbol_to_page = notion.get_watchlist()
     
     if not symbols:
         logger.warning("empty_watchlist")
@@ -78,6 +82,20 @@ def run_scan(cfg: Config):
             # Send Telegram notification
             message = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
             try:
+                telegram.send(message)
+                logger.info("telegram_sent", symbol=symbol)
+                
+                # Remove from watchlist and add to signals database
+                page_id = symbol_to_page.get(symbol)
+                if page_id:
+                    notion.delete_page(page_id)
+                    print(f"   🗑️  Removed {symbol} from watchlist")
+                
+                # Add to signals database (if configured)
+                if cfg.notion.signals_database_id:
+                    from datetime import date
+                    notion.add_to_signals(symbol, date.today().isoformat())
+                    print(f"   ➕ Added {symbol} to signals database")
                 telegram.send(message)
                 logger.info("telegram_sent", symbol=symbol)
             except Exception as e:

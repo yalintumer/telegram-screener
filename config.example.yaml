@@ -5,6 +5,7 @@ telegram:
 notion:
   api_token: "YOUR_NOTION_API_TOKEN"
   database_id: "YOUR_NOTION_DATABASE_ID"
+  signals_database_id: "YOUR_SIGNALS_DATABASE_ID"  # Optional: Leave empty or remove if not using
 
 data:
   max_watch_days: 5

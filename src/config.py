@@ -63,6 +63,7 @@ class NotionConfig(BaseModel):
     """Notion API configuration for fetching watchlist"""
     api_token: str = Field(..., description="Notion integration token")
     database_id: str = Field(..., description="Database ID containing watchlist")
+    signals_database_id: Optional[str] = Field(default=None, description="Optional: Database ID for completed signals")
     
     @field_validator('api_token', 'database_id')
     @classmethod
