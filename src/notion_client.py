@@ -183,5 +183,12 @@ class NotionClient:
             return True
             
         except Exception as e:
-            logger.error("notion.add_signal_failed", symbol=symbol, error=str(e))
+            error_detail = ""
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_detail = e.response.json()
+                except:
+                    error_detail = e.response.text
+            logger.error("notion.add_signal_failed", symbol=symbol, error=str(e), detail=error_detail)
+            print(f"   ❌ Failed to add to signals: {error_detail}")
             return False
