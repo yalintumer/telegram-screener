@@ -16,6 +16,7 @@ sentry_sdk.init(
     # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
     send_default_pii=True,
 )
+division_by_zero = 1 / 0
 
 
 def check_symbol(symbol: str) -> bool:
