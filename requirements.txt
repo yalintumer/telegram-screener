@@ -1,28 +1,16 @@
 # Core dependencies
-pillow>=10.0.0
-pytesseract>=0.3.10
-mss>=9.0.0
 requests>=2.31.0
 pandas>=2.0.0
 pyyaml>=6.0.0
 
-# macOS automation (for capture.py)
-pyautogui>=0.9.54
-pyobjc-core>=10.0; sys_platform == 'darwin'
-pyobjc-framework-Quartz>=10.0; sys_platform == 'darwin'
-
-# Enhanced features
-python-dotenv>=1.0.0
-pydantic>=2.0.0
-tenacity>=8.2.0
-tqdm>=4.66.0
-rich>=13.0.0
-watchdog>=4.0.0
-
 # Data source
 yfinance>=0.2.40
 
+# Config & validation
+python-dotenv>=1.0.0
+pydantic>=2.0.0
+
 # Testing (optional)
 pytest>=7.4.0
-pytest-cov>=4.1.0
+
 

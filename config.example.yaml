@@ -1,22 +1,14 @@
 telegram:
   bot_token: "YOUR_TELEGRAM_BOT_TOKEN"
   chat_id: "YOUR_TELEGRAM_CHAT_ID"
+
+notion:
+  api_token: "YOUR_NOTION_API_TOKEN"
+  database_id: "YOUR_NOTION_DATABASE_ID"
+
 data:
   max_watch_days: 5
-indicators:
-  rsi_period: 14
-  stoch_rsi_period: 14
-  k: 3
-  d: 3
+
 api:
-  provider: "yfinance"  # Changed to yfinance - FREE & UNLIMITED!
-  token: ""  # Not needed for yfinance
-screen:
-  region: [0, 200, 165, 645]  # left, top, width, height
-  app_name: "TradingView"  # Uygulama adı (macOS için)
-tesseract:
-  config_str: "--psm 6"  # Uniform block of text - en iyi sonuç
-vm_ssh:
-  host: "167.99.252.127"
-  user: "root"
-  project_path: "~/telegram-screener"
+  provider: "yfinance"
+  token: ""

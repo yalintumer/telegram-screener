@@ -59,48 +59,24 @@ class TesseractConfig(BaseModel):
     config_str: str = "--psm 6"
 
 
-class VMSSHConfig(BaseModel):
-    """VM SSH configuration for sending tickers to remote VM"""
-    host: str = Field(..., description="VM hostname or IP address")
-    user: str = Field(..., description="SSH username")
-    project_path: str = Field(..., description="Path to telegram-screener project on VM")
+class NotionConfig(BaseModel):
+    """Notion API configuration for fetching watchlist"""
+    api_token: str = Field(..., description="Notion integration token")
+    database_id: str = Field(..., description="Database ID containing watchlist")
     
-    @field_validator('host')
+    @field_validator('api_token', 'database_id')
     @classmethod
-    def validate_host(cls, v: str) -> str:
-        """Validate host is not empty and has reasonable format"""
-        if not v or v.strip() == "":
-            raise ValueError("VM host cannot be empty")
-        # Basic validation - either IP or hostname
-        if not any(c.isalnum() for c in v):
-            raise ValueError(f"Invalid VM host format: {v}")
-        return v.strip()
-    
-    @field_validator('user')
-    @classmethod
-    def validate_user(cls, v: str) -> str:
-        """Validate SSH user is not empty"""
-        if not v or v.strip() == "":
-            raise ValueError("SSH user cannot be empty")
-        return v.strip()
-    
-    @field_validator('project_path')
-    @classmethod
-    def validate_path(cls, v: str) -> str:
-        """Validate project path is not empty"""
-        if not v or v.strip() == "":
-            raise ValueError("Project path cannot be empty")
-        # Expand ~ if present
-        return v.strip()
+    def not_placeholder(cls, v: str) -> str:
+        if v.startswith('YOUR_'):
+            raise ValueError('Replace placeholder values in config')
+        return v
 
 
 class Config(BaseModel):
     telegram: TelegramConfig
     api: APIConfig
     data: DataConfig
-    screen: ScreenConfig
-    tesseract: TesseractConfig = Field(default_factory=TesseractConfig)
-    vm_ssh: Optional[VMSSHConfig] = Field(default=None, description="VM SSH config (optional)")
+    notion: NotionConfig
     log_level: str = Field(default="INFO")
 
     @classmethod
