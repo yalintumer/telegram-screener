@@ -96,8 +96,6 @@ def run_scan(cfg: Config):
                     from datetime import date
                     notion.add_to_signals(symbol, date.today().isoformat())
                     print(f"   ➕ Added {symbol} to signals database")
-                telegram.send(message)
-                logger.info("telegram_sent", symbol=symbol)
             except Exception as e:
                 logger.error("telegram_failed", symbol=symbol, error=str(e))
                 print(f"   ⚠️  Failed to send Telegram: {e}")

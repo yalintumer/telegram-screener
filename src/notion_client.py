@@ -136,13 +136,13 @@ class NotionClient:
             logger.error("notion.delete_failed", page_id=page_id, error=str(e))
             return False
     
-    def add_to_signals(self, symbol: str, date: str = None) -> bool:
+    def add_to_signals(self, symbol: str, date_str: str = None) -> bool:
         """
         Add a symbol to the signals database
         
         Args:
             symbol: Stock ticker symbol
-            date: Signal date (optional, defaults to today)
+            date_str: Signal date (optional, defaults to today)
             
         Returns:
             True if successful, False otherwise
@@ -151,16 +151,37 @@ class NotionClient:
             logger.warning("notion.no_signals_db", symbol=symbol)
             return False
         
-        url = f"{self.base_url}/pages"
-        
         try:
             from datetime import date as dt
-            signal_date = date or dt.today().isoformat()
+            signal_date = date_str or dt.today().isoformat()
             
+            # First, get the database schema to find the title property name
+            schema_url = f"{self.base_url}/databases/{self.signals_database_id}"
+            schema_response = requests.get(schema_url, headers=self.headers)
+            schema_response.raise_for_status()
+            schema_data = schema_response.json()
+            
+            # Find the title property (first property is usually title)
+            properties = schema_data.get("properties", {})
+            title_property = None
+            date_property = None
+            
+            for prop_name, prop_data in properties.items():
+                if prop_data.get("type") == "title":
+                    title_property = prop_name
+                if prop_data.get("type") == "date":
+                    date_property = prop_name
+            
+            if not title_property:
+                logger.error("notion.no_title_property", database_id=self.signals_database_id)
+                print(f"   ❌ Signals database has no title property")
+                return False
+            
+            # Build payload with dynamic property names
             payload = {
                 "parent": {"database_id": self.signals_database_id},
                 "properties": {
-                    "Symbol": {
+                    title_property: {
                         "title": [
                             {
                                 "text": {
@@ -168,18 +189,23 @@ class NotionClient:
                                 }
                             }
                         ]
-                    },
-                    "Date": {
-                        "date": {
-                            "start": signal_date
-                        }
                     }
                 }
             }
             
-            response = requests.post(url, headers=self.headers, json=payload)
+            # Add date if date property exists
+            if date_property:
+                payload["properties"][date_property] = {
+                    "date": {
+                        "start": signal_date
+                    }
+                }
+            
+            # Create the page
+            create_url = f"{self.base_url}/pages"
+            response = requests.post(create_url, headers=self.headers, json=payload)
             response.raise_for_status()
-            logger.info("notion.signal_added", symbol=symbol, date=signal_date)
+            logger.info("notion.signal_added", symbol=symbol, date=signal_date, title_prop=title_property)
             return True
             
         except Exception as e:
