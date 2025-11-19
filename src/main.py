@@ -8,6 +8,14 @@ from .telegram_client import TelegramClient
 from .indicators import stochastic_rsi, stoch_rsi_buy
 from .data_source_yfinance import daily_ohlc
 from .logger import logger
+import sentry_sdk
+
+sentry_sdk.init(
+    dsn="https://419f2c57fd95ab96c48f859f9b7ed347@o4510393252839424.ingest.de.sentry.io/4510393259196496",
+    # Add data like request headers and IP for users,
+    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
+    send_default_pii=True,
+)
 
 
 def check_symbol(symbol: str) -> bool:
