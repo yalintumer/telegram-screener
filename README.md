@@ -289,8 +289,19 @@ TELEGRAM_CHAT_ID=987654321
 # Run once to populate watchlist from S&P 500
 python -m src.main --market-scan
 
-# Schedule weekly (add to cron):
-# 0 23 * * 0 cd /path/to/telegram-screener && python -m src.main --market-scan
+# Schedule weekly (add to crontab on server):
+crontab -e
+# Add this line (runs every Sunday at 11 PM):
+# 0 23 * * 0 cd /root/telegram-screener && source venv/bin/activate && python -m src.main --market-scan >> logs/market-scan.log 2>&1
+```
+
+**Check if market scanner ran:**
+```bash
+# View logs
+tail -f logs/market-scan.log
+
+# Check cron job
+crontab -l
 ```
 
 **VM out of sync?**
