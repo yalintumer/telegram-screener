@@ -12,11 +12,9 @@ import sentry_sdk
 
 sentry_sdk.init(
     dsn="https://419f2c57fd95ab96c48f859f9b7ed347@o4510393252839424.ingest.de.sentry.io/4510393259196496",
-    # Add data like request headers and IP for users,
-    # see https://docs.sentry.io/platforms/python/data-management/data-collected/ for more info
-    send_default_pii=True,
+    traces_sample_rate=1.0,  # Capture 100% of transactions for performance monitoring
+    send_default_pii=True,   # Include user IP and request data
 )
-division_by_zero = 1 / 0
 
 
 def check_symbol(symbol: str) -> bool:
