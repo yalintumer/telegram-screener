@@ -6,7 +6,7 @@ from datetime import date
 from .config import Config
 from .notion_client import NotionClient
 from .telegram_client import TelegramClient
-from .indicators import stochastic_rsi, stoch_rsi_buy
+from .indicators import stochastic_rsi, stoch_rsi_buy, mfi, mfi_uptrend
 from .data_source_yfinance import daily_ohlc
 from .logger import logger
 import sentry_sdk
@@ -20,9 +20,13 @@ sentry_sdk.init(
 
 def check_symbol(symbol: str) -> bool:
     """
-    Check if symbol has Stochastic RSI buy signal
+    Check if symbol has Stochastic RSI + MFI buy signal
     
-    Returns True if buy signal detected
+    Conditions:
+    1. Stochastic RSI bullish cross in oversold zone
+    2. MFI in uptrend for last 3 days (volume-weighted momentum)
+    
+    Returns True if both conditions met
     """
     try:
         logger.info("checking_symbol", symbol=symbol)
@@ -35,15 +39,33 @@ def check_symbol(symbol: str) -> bool:
             return False
         
         # Calculate Stochastic RSI
-        ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
+        stoch_ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
         
-        # Check for buy signal
-        has_signal = stoch_rsi_buy(ind)
+        # Check Stochastic RSI signal
+        has_stoch_signal = stoch_rsi_buy(stoch_ind)
         
-        if has_signal:
-            logger.info("signal_found", symbol=symbol)
+        if not has_stoch_signal:
+            return False
         
-        return has_signal
+        # Calculate MFI (Money Flow Index)
+        mfi_values = mfi(df, period=14)
+        
+        # Check if MFI is in 3-day uptrend
+        mfi_trending_up = mfi_uptrend(mfi_values, days=3)
+        
+        if has_stoch_signal and mfi_trending_up:
+            logger.info("signal_found", symbol=symbol, 
+                       mfi_current=float(mfi_values.iloc[-1]),
+                       stoch_k=float(stoch_ind['k'].iloc[-1]))
+            return True
+        
+        # Log why signal was rejected
+        if has_stoch_signal and not mfi_trending_up:
+            logger.info("signal_rejected_mfi", symbol=symbol, 
+                       reason="MFI not in 3-day uptrend",
+                       mfi_current=float(mfi_values.iloc[-1]))
+        
+        return False
         
     except Exception as e:
         logger.error("check_failed", symbol=symbol, error=str(e))
@@ -87,6 +109,11 @@ def run_scan(cfg: Config):
             print("✅ SIGNAL!")
             signals_found.append(symbol)
             
+            # Get indicator values for message
+            df = daily_ohlc(symbol)
+            mfi_values = mfi(df, period=14)
+            stoch_ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
+            
             # Send Telegram notification
             today_str = date.today().strftime('%Y-%m-%d')
             
@@ -94,8 +121,13 @@ def run_scan(cfg: Config):
                 "**Yeni Sinyal Tespit Edildi!** 🚀",
                 "",
                 f"**Sembol:** `{symbol}`",
-                f"**Sinyal:** Stokastik RSI (AL)",
-                f"**Tarih:** {today_str}"
+                f"**Sinyal:** Stokastik RSI + MFI (AL)",
+                f"**Tarih:** {today_str}",
+                "",
+                "**Göstergeler:**",
+                f"• Stoch RSI K: {stoch_ind['k'].iloc[-1]:.1%}",
+                f"• Stoch RSI D: {stoch_ind['d'].iloc[-1]:.1%}",
+                f"• MFI: {mfi_values.iloc[-1]:.1f} (3-gün yükselişte)",
             ]
             message = "\n".join(message_lines)
             try:
