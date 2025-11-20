@@ -7,9 +7,13 @@ from .config import Config
 from .notion_client import NotionClient
 from .telegram_client import TelegramClient
 from .indicators import stochastic_rsi, stoch_rsi_buy, mfi, mfi_uptrend, wavetrend, wavetrend_buy, bollinger_bands
-from .data_source_yfinance import daily_ohlc
+from .data_source_yfinance import daily_ohlc, weekly_ohlc
 from .logger import logger
 from .market_symbols import get_sp500_symbols, get_market_cap_threshold
+from .signal_tracker import SignalTracker
+from .cache import MarketCapCache
+from .analytics import Analytics
+from .backup import NotionBackup
 import sentry_sdk
 import yfinance as yf
 
@@ -20,52 +24,119 @@ sentry_sdk.init(
 )
 
 
-def check_symbol_wavetrend(symbol: str) -> bool:
+def update_signal_performance(signal_tracker: SignalTracker, lookback_days: int = 7) -> dict:
+    """
+    Update performance metrics for recent signals
+    
+    Args:
+        signal_tracker: SignalTracker instance
+        lookback_days: Number of days to wait before evaluating signal (default 7)
+    
+    Returns:
+        Dictionary with update statistics
+    """
+    updated = 0
+    failed = 0
+    
+    for symbol, alerts in signal_tracker.alerts.items():
+        for alert_data in alerts:
+            # Skip if already evaluated or too recent
+            if alert_data.get('evaluated') or (time.time() - alert_data['timestamp']) < lookback_days * 86400:
+                continue
+            
+            try:
+                # Get current price
+                ticker = yf.Ticker(symbol)
+                current_price = ticker.info.get('currentPrice') or ticker.info.get('regularMarketPrice')
+                
+                if current_price:
+                    signal_tracker.update_signal_performance(symbol, alert_data['timestamp'], current_price)
+                    updated += 1
+            except Exception as e:
+                logger.warning("performance_update_failed", symbol=symbol, error=str(e))
+                failed += 1
+    
+    return {"updated": updated, "failed": failed}
+
+
+def check_symbol_wavetrend(symbol: str, use_multi_timeframe: bool = True) -> bool:
     """
     Check if symbol has WaveTrend buy signal (second-stage filter)
     
     Conditions:
-    1. WaveTrend WT1 crosses above WT2 in oversold zone (< -53)
+    1. Daily: WaveTrend WT1 crosses above WT2 in oversold zone (< -53)
+    2. Weekly (optional): WaveTrend must NOT be extremely overbought (WT1 < 60)
+    
+    Args:
+        symbol: Stock ticker symbol
+        use_multi_timeframe: If True, confirms daily signal with weekly trend
     
     Returns True if WaveTrend signal detected
     """
     try:
-        logger.info("checking_wavetrend", symbol=symbol)
+        logger.info("checking_wavetrend", symbol=symbol, multi_timeframe=use_multi_timeframe)
         
-        # Get price data
-        df = daily_ohlc(symbol)
+        # Get daily price data
+        df_daily = daily_ohlc(symbol)
         
-        if df is None or len(df) < 30:
+        if df_daily is None or len(df_daily) < 30:
             logger.warning("insufficient_data", symbol=symbol)
             return False
         
-        # Calculate WaveTrend
-        wt = wavetrend(df, channel_length=10, average_length=21)
+        # Calculate daily WaveTrend
+        wt_daily = wavetrend(df_daily, channel_length=10, average_length=21)
         
-        # Check for WaveTrend buy signal
-        has_wt_signal = wavetrend_buy(wt, lookback_days=3, oversold_level=-53)
+        # Check for daily WaveTrend buy signal
+        has_daily_signal = wavetrend_buy(wt_daily, lookback_days=3, oversold_level=-53)
         
-        if has_wt_signal:
+        if not has_daily_signal:
+            return False
+        
+        # Multi-timeframe confirmation (optional)
+        if use_multi_timeframe:
+            df_weekly = weekly_ohlc(symbol, weeks=52)
+            
+            if df_weekly is not None and len(df_weekly) >= 14:
+                wt_weekly = wavetrend(df_weekly, channel_length=10, average_length=21)
+                weekly_wt1 = float(wt_weekly['wt1'].iloc[-1])
+                
+                # Reject if weekly is extremely overbought (prevents buying at tops)
+                if weekly_wt1 > 60:
+                    logger.info("wavetrend_rejected_weekly", symbol=symbol,
+                               daily_signal=True, weekly_wt1=weekly_wt1)
+                    return False
+                
+                logger.info("wavetrend_multi_timeframe_confirmed", symbol=symbol,
+                           daily_wt1=float(wt_daily['wt1'].iloc[-1]),
+                           weekly_wt1=weekly_wt1)
+            else:
+                logger.warning("weekly_data_unavailable", symbol=symbol)
+        
+        if has_daily_signal:
             logger.info("wavetrend_signal_found", symbol=symbol,
-                       wt1=float(wt['wt1'].iloc[-1]),
-                       wt2=float(wt['wt2'].iloc[-1]))
+                       wt1=float(wt_daily['wt1'].iloc[-1]),
+                       wt2=float(wt_daily['wt2'].iloc[-1]))
         
-        return has_wt_signal
+        return has_daily_signal
         
     except Exception as e:
         logger.error("wavetrend_check_failed", symbol=symbol, error=str(e))
         return False
 
 
-def check_market_filter(symbol: str) -> dict:
+def check_market_filter(symbol: str, cache: MarketCapCache = None) -> dict:
     """
     Check if symbol passes market scanner filters (Stage 0).
     
     Filters:
-    1. Market Cap >= 50B USD
+    1. Market Cap >= 50B USD (cached for 24h)
     2. Stoch RSI (3,3,14,14) - D < 20
     3. Price < Bollinger Lower Band (20 period)
     4. MFI (14) <= 40
+    
+    Args:
+        symbol: Stock symbol
+        cache: Optional MarketCapCache instance for performance
     
     Returns:
         dict with 'passed' (bool) and indicator values, or None if data unavailable
@@ -80,20 +151,29 @@ def check_market_filter(symbol: str) -> dict:
             logger.warning("market_filter_insufficient_data", symbol=symbol)
             return None
         
-        # 1. Check Market Cap >= 50B USD
-        try:
-            ticker = yf.Ticker(symbol)
-            info = ticker.info
-            market_cap = info.get('marketCap', 0)
-            
-            if market_cap < get_market_cap_threshold():
-                logger.info("market_filter_market_cap_too_low", symbol=symbol, 
-                           market_cap=market_cap, threshold=get_market_cap_threshold())
-                return {'passed': False, 'reason': 'market_cap_too_low'}
+        # 1. Check Market Cap >= 50B USD (with caching)
+        market_cap = None
+        if cache:
+            market_cap = cache.get(symbol)
         
-        except Exception as e:
-            logger.warning("market_filter_market_cap_error", symbol=symbol, error=str(e))
-            return None
+        if market_cap is None:
+            try:
+                ticker = yf.Ticker(symbol)
+                info = ticker.info
+                market_cap = info.get('marketCap', 0)
+                
+                # Cache the result
+                if cache and market_cap > 0:
+                    cache.set(symbol, market_cap)
+            
+            except Exception as e:
+                logger.warning("market_filter_market_cap_error", symbol=symbol, error=str(e))
+                return None
+        
+        if market_cap < get_market_cap_threshold():
+            logger.info("market_filter_market_cap_too_low", symbol=symbol, 
+                       market_cap=market_cap, threshold=get_market_cap_threshold())
+            return {'passed': False, 'reason': 'market_cap_too_low'}
         
         # 2. Calculate Stochastic RSI (3,3,14,14)
         stoch_ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
@@ -151,9 +231,19 @@ def run_market_scan(cfg: Config) -> None:
     If symbol already exists in watchlist, updates the date instead of creating duplicate.
     No Telegram notification for market scanner results.
     
+    Features:
+    - Market cap caching (24h TTL) for faster scanning
+    - Progress tracking every 50 symbols
+    
     This should run weekly (e.g., Sunday night before market opens).
     """
     logger.info("market_scan_started")
+    
+    # Initialize cache for market cap data
+    cache = MarketCapCache()
+    cache.clear_expired()  # Clean up old entries
+    cache_stats = cache.get_stats()
+    logger.info("cache.initialized", **cache_stats)
     
     # Initialize clients
     notion = NotionClient(
@@ -177,7 +267,8 @@ def run_market_scan(cfg: Config) -> None:
     added_count = 0
     
     print(f"\n🔍 Market Scanner: Analyzing {len(sp500_symbols)} S&P 500 stocks...")
-    print(f"📊 Filters: Market Cap ≥50B, Stoch RSI D<20, Price<BB Lower, MFI≤40\n")
+    print(f"📊 Filters: Market Cap ≥50B, Stoch RSI D<20, Price<BB Lower, MFI≤40")
+    print(f"💾 Cache: {cache_stats['valid_entries']} valid entries, {cache_stats['expired_entries']} expired\n")
     
     # Scan each symbol
     for i, symbol in enumerate(sp500_symbols, 1):
@@ -185,8 +276,8 @@ def run_market_scan(cfg: Config) -> None:
         if i % 50 == 0:
             print(f"   Progress: {i}/{len(sp500_symbols)} symbols scanned...")
         
-        # Check market filters
-        result = check_market_filter(symbol)
+        # Check market filters (with cache)
+        result = check_market_filter(symbol, cache=cache)
         
         if result and result.get('passed'):
             found_count += 1
@@ -212,6 +303,52 @@ def run_market_scan(cfg: Config) -> None:
         # Rate limiting: 0.5 second per request (max 2000 req/hour with yfinance)
         time.sleep(0.5)
     
+    # Update signal performance (evaluate signals from 7+ days ago)
+    print("\n📊 Updating signal performance metrics...")
+    signal_tracker = SignalTracker()
+    perf_update = update_signal_performance(signal_tracker, lookback_days=7)
+    print(f"   ✅ Performance updated: {perf_update['updated']} signals evaluated")
+    if perf_update['failed'] > 0:
+        print(f"   ⚠️  Failed to evaluate: {perf_update['failed']} signals")
+    
+    # Record analytics
+    analytics = Analytics()
+    analytics.record_market_scan(found_count, added_count, updated_count)
+    
+    # Backup Notion databases (weekly)
+    print("\n💾 Backing up Notion databases...")
+    backup = NotionBackup()
+    databases = {
+        "watchlist": cfg.notion_database_id,
+        "signals": cfg.signals_database_id,
+        "buy": cfg.buy_database_id
+    }
+    backup_files = backup.backup_all(notion, databases)
+    
+    # Cleanup old backups (keep 30 days)
+    deleted = backup.cleanup_old_backups(days=30)
+    if deleted > 0:
+        print(f"   🗑️  Cleaned up {deleted} old backups (>30 days)")
+    
+    backup_stats = backup.get_backup_stats()
+    print(f"   📦 Total backups: {backup_stats['total_backups']} ({backup_stats['total_size_mb']:.1f} MB)")
+    
+    # Check if weekly report should be sent
+    if analytics.should_send_weekly_report():
+        print("\n📧 Generating weekly report...")
+        report = analytics.generate_weekly_report(signal_tracker)
+        print(report)
+        
+        # Send report via Telegram
+        try:
+            telegram = TelegramClient(cfg.telegram_bot_token, cfg.telegram_chat_id)
+            telegram.send(f"```\n{report}\n```")
+            analytics.mark_report_sent()
+            print("   ✅ Weekly report sent via Telegram")
+        except Exception as e:
+            logger.error("weekly_report_failed", error=str(e))
+            print(f"   ⚠️  Failed to send weekly report: {e}")
+    
     # Summary
     print(f"\n" + "=" * 60)
     print(f"📈 Market Scan Complete!")
@@ -222,7 +359,8 @@ def run_market_scan(cfg: Config) -> None:
     print(f"=" * 60 + "\n")
     
     logger.info("market_scan_completed", 
-                found=found_count, added=added_count, updated=updated_count)
+                found=found_count, added=added_count, updated=updated_count,
+                performance_updated=perf_update['updated'])
 
 
 def check_symbol(symbol: str) -> bool:
@@ -387,6 +525,23 @@ def run_scan(cfg: Config):
         for s in signals_found:
             print(f"   • {s}")
     
+    # Record analytics
+    analytics = Analytics()
+    analytics.record_stage1_scan(
+        checked=len(symbols) - len(skipped_symbols),
+        passed=len(signals_found)
+    )
+    
+    # Record each alert
+    for symbol in signals_found:
+        try:
+            df = daily_ohlc(symbol)
+            if df is not None:
+                price = float(df['Close'].iloc[-1])
+                analytics.record_alert_sent(symbol, price)
+        except:
+            pass
+    
     logger.info("scan_complete", total=len(symbols), skipped=len(skipped_symbols), signals=len(signals_found))
 
 
@@ -396,9 +551,14 @@ def run_wavetrend_scan(cfg: Config):
     
     This scans the first-stage signals (Stoch RSI + MFI) and applies WaveTrend filter.
     Confirmed signals move to buy database.
+    
+    Features:
+    - Alert fatigue prevention (max 5 alerts/day)
+    - Symbol cooldown (7 days between same symbol alerts)
+    - Signal performance tracking
     """
     
-    # Initialize clients
+    # Initialize clients and trackers
     notion = NotionClient(
         cfg.notion.api_token,
         cfg.notion.database_id,
@@ -406,6 +566,12 @@ def run_wavetrend_scan(cfg: Config):
         cfg.notion.buy_database_id
     )
     telegram = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
+    signal_tracker = SignalTracker()
+    
+    # Show daily stats
+    daily_stats = signal_tracker.get_daily_stats()
+    logger.info("signal_tracker.daily_stats", **daily_stats)
+    print(f"\n📊 Alert Stats Today: {daily_stats['alerts_sent']}/5 sent, {daily_stats['symbols_in_cooldown']} in cooldown\n")
     
     logger.info("wavetrend_scan_started")
     
@@ -447,23 +613,51 @@ def run_wavetrend_scan(cfg: Config):
         has_wt_signal = check_symbol_wavetrend(symbol)
         
         if has_wt_signal:
+            # Check alert limits BEFORE confirming
+            can_alert, reason = signal_tracker.can_send_alert(symbol, daily_limit=5, cooldown_days=7)
+            
+            if not can_alert:
+                print(f"⚠️  SIGNAL BUT ALERT BLOCKED: {reason}")
+                logger.warning("alert_blocked", symbol=symbol, reason=reason)
+                # Still move to buy database but don't send Telegram
+                confirmed_signals.append(symbol)
+                
+                # Add to buy database silently
+                if cfg.notion.buy_database_id:
+                    page_id = symbol_to_page.get(symbol)
+                    if page_id:
+                        notion.delete_page(page_id)
+                    notion.add_to_buy(symbol, date.today().isoformat())
+                    print(f"   ✅ Added {symbol} to BUY (no alert)")
+                continue
+            
             print("✅ CONFIRMED!")
             confirmed_signals.append(symbol)
             
-            # Get WaveTrend values for message
+            # Get indicator values for message
             df = daily_ohlc(symbol)
             wt = wavetrend(df, channel_length=10, average_length=21)
             stoch = stochastic_rsi(df['Close'])
             mfi_val = mfi(df)
+            current_price = float(df['Close'].iloc[-1])
             
-            # Send Telegram notification
+            # Get historical performance stats if available
+            perf_stats = signal_tracker.get_signal_stats(symbol)
+            perf_text = ""
+            if perf_stats['evaluated'] > 0:
+                perf_text = f"\n📊 **Historical Performance ({symbol}):**\n   • Win Rate: {perf_stats['win_rate']}% | Avg Return: {perf_stats['avg_return']}%\n"
+            
+            # Build rich Telegram notification
             today_str = date.today().strftime('%Y-%m-%d')
+            tradingview_link = f"https://www.tradingview.com/chart/?symbol={symbol}"
             
             message_lines = [
                 "🚨🚨🚨 **BUY SIGNAL CONFIRMED!** 🚨🚨🚨",
                 "━━━━━━━━━━━━━━━━━━━━━━",
                 "",
                 f"**📈 SYMBOL: `{symbol}`**",
+                f"💰 **Price:** ${current_price:.2f}",
+                f"📊 [View on TradingView]({tradingview_link})",
                 "",
                 "**✅ TWO-STAGE FILTER PASSED:**",
                 "",
@@ -475,17 +669,34 @@ def run_wavetrend_scan(cfg: Config):
                 f"   • WT1: {wt['wt1'].iloc[-1]:.2f}",
                 f"   • WT2: {wt['wt2'].iloc[-1]:.2f}",
                 f"   • **Oversold zone cross detected** 🎯",
-                "",
+            ]
+            
+            if perf_text:
+                message_lines.append(perf_text)
+            
+            message_lines.extend([
                 "━━━━━━━━━━━━━━━━━━━━━━",
                 f"📅 **Date:** {today_str}",
                 "🚀 **ACTION: STRONG BUY CANDIDATE**",
                 "━━━━━━━━━━━━━━━━━━━━━━",
-            ]
+            ])
+            
             message = "\n".join(message_lines)
             
             try:
                 telegram.send(message)
                 logger.info("wavetrend_telegram_sent", symbol=symbol)
+                
+                # Record alert in tracker
+                signal_data = {
+                    "price": current_price,
+                    "stoch_k": float(stoch['k'].iloc[-1]),
+                    "stoch_d": float(stoch['d'].iloc[-1]),
+                    "mfi": float(mfi_val.iloc[-1]),
+                    "wt1": float(wt['wt1'].iloc[-1]),
+                    "wt2": float(wt['wt2'].iloc[-1])
+                }
+                signal_tracker.record_alert(symbol, signal_data)
                 
                 # Remove from signals database
                 page_id = symbol_to_page.get(symbol)
@@ -517,6 +728,13 @@ def run_wavetrend_scan(cfg: Config):
         print(f"\n🎯 Confirmed buy signals:")
         for s in confirmed_signals:
             print(f"   • {s}")
+    
+    # Record analytics
+    analytics = Analytics()
+    analytics.record_stage2_scan(
+        checked=len(symbols) - len(skipped_buy),
+        confirmed=len(confirmed_signals)
+    )
     
     logger.info("wavetrend_scan_complete", total=len(symbols), skipped=len(skipped_buy), confirmed=len(confirmed_signals))
 
