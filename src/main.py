@@ -110,7 +110,7 @@ def run_scan(cfg: Config):
                 
                 # Add to signals database (if configured)
                 if cfg.notion.signals_database_id:
-                    from datetime import date
+                    # use top-level `date` import (don't re-import inside function)
                     notion.add_to_signals(symbol, date.today().isoformat())
                     print(f"   ➕ Added {symbol} to signals database")
             except Exception as e:
