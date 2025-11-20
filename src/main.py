@@ -116,7 +116,8 @@ def run_scan(cfg: Config):
     notion = NotionClient(
         cfg.notion.api_token, 
         cfg.notion.database_id,
-        cfg.notion.signals_database_id
+        cfg.notion.signals_database_id,
+        cfg.notion.buy_database_id
     )
     telegram = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
     
@@ -131,14 +132,27 @@ def run_scan(cfg: Config):
         print("⚠️  Watchlist is empty in Notion")
         return
     
+    # Get symbols already in signals or buy databases (to avoid duplicates)
+    existing_symbols = notion.get_all_symbols()
+    if existing_symbols:
+        logger.info("existing_signals_found", count=len(existing_symbols), symbols=list(existing_symbols))
+        print(f"ℹ️  Skipping {len(existing_symbols)} symbols already in signals/buy: {', '.join(sorted(existing_symbols))}\n")
+    
     print(f"📋 Watchlist: {len(symbols)} symbols")
     print(f"   {', '.join(symbols)}\n")
     
     # Check each symbol
     signals_found = []
+    skipped_symbols = []
     
     for i, symbol in enumerate(symbols, 1):
         print(f"🔍 [{i}/{len(symbols)}] Checking {symbol}...", end=" ")
+        
+        # Skip if already in signals or buy database
+        if symbol in existing_symbols:
+            print("⏭️  (already in signals/buy)")
+            skipped_symbols.append(symbol)
+            continue
         
         has_signal = check_symbol(symbol)
         
@@ -195,14 +209,15 @@ def run_scan(cfg: Config):
     # Summary
     print(f"\n✅ Scan complete!")
     print(f"   Checked: {len(symbols)} symbols")
+    print(f"   Skipped: {len(skipped_symbols)} (already in signals/buy)")
     print(f"   Signals: {len(signals_found)}")
     
     if signals_found:
-        print(f"\n🎯 Buy signals found:")
+        print(f"\n🎯 New signals found:")
         for s in signals_found:
             print(f"   • {s}")
     
-    logger.info("scan_complete", total=len(symbols), signals=len(signals_found))
+    logger.info("scan_complete", total=len(symbols), skipped=len(skipped_symbols), signals=len(signals_found))
 
 
 def run_wavetrend_scan(cfg: Config):
@@ -232,14 +247,32 @@ def run_wavetrend_scan(cfg: Config):
         print("⚠️  Signals database is empty")
         return
     
+    # Get symbols already in buy database (to avoid re-adding)
+    buy_symbols = set()
+    if cfg.notion.buy_database_id:
+        try:
+            buy_symbols = set(notion._get_symbols_from_database(cfg.notion.buy_database_id))
+            if buy_symbols:
+                logger.info("existing_buy_symbols", count=len(buy_symbols), symbols=list(buy_symbols))
+                print(f"ℹ️  Skipping {len(buy_symbols)} symbols already in buy: {', '.join(sorted(buy_symbols))}\n")
+        except Exception as e:
+            logger.warning("get_buy_symbols_failed", error=str(e))
+    
     print(f"📋 Signals to check: {len(symbols)} symbols")
     print(f"   {', '.join(symbols)}\n")
     
     # Check each symbol for WaveTrend
     confirmed_signals = []
+    skipped_buy = []
     
     for i, symbol in enumerate(symbols, 1):
         print(f"🌊 [{i}/{len(symbols)}] Checking WaveTrend for {symbol}...", end=" ")
+        
+        # Skip if already in buy database
+        if symbol in buy_symbols:
+            print("⏭️  (already in buy)")
+            skipped_buy.append(symbol)
+            continue
         
         has_wt_signal = check_symbol_wavetrend(symbol)
         
@@ -307,6 +340,7 @@ def run_wavetrend_scan(cfg: Config):
     # Summary
     print(f"\n✅ WaveTrend scan complete!")
     print(f"   Checked: {len(symbols)} symbols")
+    print(f"   Skipped: {len(skipped_buy)} (already in buy)")
     print(f"   Confirmed: {len(confirmed_signals)}")
     
     if confirmed_signals:
@@ -314,7 +348,7 @@ def run_wavetrend_scan(cfg: Config):
         for s in confirmed_signals:
             print(f"   • {s}")
     
-    logger.info("wavetrend_scan_complete", total=len(symbols), confirmed=len(confirmed_signals))
+    logger.info("wavetrend_scan_complete", total=len(symbols), skipped=len(skipped_buy), confirmed=len(confirmed_signals))
 
 
 def run_continuous(cfg: Config, interval: int = 3600):

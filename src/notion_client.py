@@ -392,4 +392,80 @@ class NotionClient:
                     error_detail = e.response.text
             logger.error("notion.delete_failed", page_id=page_id, error=str(e), detail=error_detail)
             return False
+    
+    def get_all_symbols(self) -> set:
+        """
+        Get all unique symbols across signals and buy databases
+        
+        Returns:
+            Set of symbols that are already in signals or buy database
+        """
+        all_symbols = set()
+        
+        # Get from signals database
+        if self.signals_database_id:
+            try:
+                signals_symbols, _ = self.get_signals()
+                all_symbols.update(signals_symbols)
+            except Exception as e:
+                logger.warning("notion.get_signals_failed", error=str(e))
+        
+        # Get from buy database
+        if self.buy_database_id:
+            try:
+                buy_symbols = self._get_symbols_from_database(self.buy_database_id)
+                all_symbols.update(buy_symbols)
+            except Exception as e:
+                logger.warning("notion.get_buy_failed", error=str(e))
+        
+        return all_symbols
+    
+    def _get_symbols_from_database(self, database_id: str) -> list:
+        """
+        Generic method to fetch symbols from any database
+        
+        Args:
+            database_id: The ID of the database to query
+            
+        Returns:
+            List of symbols
+        """
+        try:
+            url = f"{self.base_url}/databases/{database_id}/query"
+            response = requests.post(url, headers=self.headers, json={})
+            response.raise_for_status()
+            
+            data = response.json()
+            results = data.get("results", [])
+            
+            if not results:
+                return []
+            
+            # Detect title property
+            first_page_props = results[0].get("properties", {})
+            title_property = None
+            for prop_name, prop_data in first_page_props.items():
+                if prop_data.get("type") == "title":
+                    title_property = prop_name
+                    break
+            
+            if not title_property:
+                return []
+            
+            symbols = []
+            for page in results:
+                props = page.get("properties", {})
+                title_data = props.get(title_property, {})
+                title_content = title_data.get("title", [])
+                
+                if title_content and len(title_content) > 0:
+                    symbol = title_content[0].get("text", {}).get("content", "").strip()
+                    if symbol:
+                        symbols.append(symbol)
+            
+            return symbols
+            
+        except Exception as e:
+            logger.error("notion.fetch_symbols_failed", database_id=database_id, error=str(e))
+            return []
 
