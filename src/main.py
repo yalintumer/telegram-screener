@@ -16,8 +16,6 @@ sentry_sdk.init(
     send_default_pii=True,   # Include user IP and request data
 )
 
-division_by_zero = 1 / 0
-
 
 def check_symbol(symbol: str) -> bool:
     """
