@@ -91,6 +91,100 @@ def mfi_uptrend(mfi_series: pd.Series, days: int = 3) -> bool:
     return True
 
 
+def wavetrend(df: pd.DataFrame, channel_length: int = 10, average_length: int = 21) -> pd.DataFrame:
+    """
+    Calculate WaveTrend indicator by LazyBear
+    
+    WaveTrend is a momentum oscillator that identifies overbought/oversold conditions
+    and trend changes through wt1/wt2 crossovers.
+    
+    Args:
+        df: DataFrame with High, Low, Close columns
+        channel_length: Channel length (n1, default: 10)
+        average_length: Average length (n2, default: 21)
+    
+    Returns:
+        DataFrame with columns: wt1, wt2
+        - wt1: Main wave (tci)
+        - wt2: Signal line (SMA of wt1, period 4)
+    
+    Levels:
+        Overbought: > 60 (extreme), > 53 (warning)
+        Oversold: < -60 (extreme), < -53 (warning)
+    """
+    # ap = hlc3 (typical price)
+    ap = (df['High'] + df['Low'] + df['Close']) / 3
+    
+    # esa = EMA of ap with channel_length
+    esa = ap.ewm(span=channel_length, adjust=False).mean()
+    
+    # d = EMA of absolute deviation
+    d = (ap - esa).abs().ewm(span=channel_length, adjust=False).mean()
+    
+    # ci = (ap - esa) / (0.015 * d)
+    ci = (ap - esa) / (0.015 * d)
+    
+    # tci = EMA of ci with average_length
+    tci = ci.ewm(span=average_length, adjust=False).mean()
+    
+    # wt1 = tci
+    wt1 = tci
+    
+    # wt2 = SMA of wt1 with period 4
+    wt2 = wt1.rolling(4).mean()
+    
+    return pd.DataFrame({"wt1": wt1, "wt2": wt2})
+
+
+def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = 3, 
+                  oversold_level: int = -53) -> bool:
+    """
+    Detect WaveTrend buy signal (bullish cross in oversold zone)
+    
+    Args:
+        wt_df: DataFrame with wt1, wt2 columns
+        lookback_days: Check for cross in last N days (default: 3)
+        oversold_level: Oversold threshold (default: -53)
+    
+    Returns:
+        True if wt1 crosses above wt2 in oversold zone
+    
+    Conditions:
+        1. wt1 crosses above wt2 (bullish cross)
+        2. Cross happens in oversold zone (wt1 or wt2 < oversold_level)
+    """
+    min_required = lookback_days + 1
+    if len(wt_df) < min_required:
+        return False
+    
+    # Check last N days for bullish cross
+    for i in range(1, lookback_days + 1):
+        idx = -i
+        prev_idx = idx - 1
+        
+        if abs(prev_idx) > len(wt_df):
+            break
+        
+        prev = wt_df.iloc[prev_idx]
+        curr = wt_df.iloc[idx]
+        
+        # NaN check
+        if pd.isna(prev.wt1) or pd.isna(prev.wt2) or pd.isna(curr.wt1) or pd.isna(curr.wt2):
+            continue
+        
+        # Cross up: wt1 crosses above wt2
+        cross_up = prev.wt1 <= prev.wt2 and curr.wt1 > curr.wt2
+        
+        # Oversold: Either wave below oversold level
+        oversold = (curr.wt1 < oversold_level or curr.wt2 < oversold_level or
+                   prev.wt1 < oversold_level or prev.wt2 < oversold_level)
+        
+        if cross_up and oversold:
+            return True
+    
+    return False
+
+
 def stochastic_rsi(close: pd.Series, rsi_period=14, stoch_period=14, k=3, d=3) -> pd.DataFrame:
     r = rsi(close, rsi_period)
     r_min = r.rolling(stoch_period).min()

@@ -6,7 +6,7 @@ from datetime import date
 from .config import Config
 from .notion_client import NotionClient
 from .telegram_client import TelegramClient
-from .indicators import stochastic_rsi, stoch_rsi_buy, mfi, mfi_uptrend
+from .indicators import stochastic_rsi, stoch_rsi_buy, mfi, mfi_uptrend, wavetrend, wavetrend_buy
 from .data_source_yfinance import daily_ohlc
 from .logger import logger
 import sentry_sdk
@@ -16,6 +16,43 @@ sentry_sdk.init(
     traces_sample_rate=1.0,  # Capture 100% of transactions for performance monitoring
     send_default_pii=True,   # Include user IP and request data
 )
+
+
+def check_symbol_wavetrend(symbol: str) -> bool:
+    """
+    Check if symbol has WaveTrend buy signal (second-stage filter)
+    
+    Conditions:
+    1. WaveTrend WT1 crosses above WT2 in oversold zone (< -53)
+    
+    Returns True if WaveTrend signal detected
+    """
+    try:
+        logger.info("checking_wavetrend", symbol=symbol)
+        
+        # Get price data
+        df = daily_ohlc(symbol)
+        
+        if df is None or len(df) < 30:
+            logger.warning("insufficient_data", symbol=symbol)
+            return False
+        
+        # Calculate WaveTrend
+        wt = wavetrend(df, channel_length=10, average_length=21)
+        
+        # Check for WaveTrend buy signal
+        has_wt_signal = wavetrend_buy(wt, lookback_days=3, oversold_level=-53)
+        
+        if has_wt_signal:
+            logger.info("wavetrend_signal_found", symbol=symbol,
+                       wt1=float(wt['wt1'].iloc[-1]),
+                       wt2=float(wt['wt2'].iloc[-1]))
+        
+        return has_wt_signal
+        
+    except Exception as e:
+        logger.error("wavetrend_check_failed", symbol=symbol, error=str(e))
+        return False
 
 
 def check_symbol(symbol: str) -> bool:
@@ -168,6 +205,118 @@ def run_scan(cfg: Config):
     logger.info("scan_complete", total=len(symbols), signals=len(signals_found))
 
 
+def run_wavetrend_scan(cfg: Config):
+    """
+    Second-stage scan: Check signals database for WaveTrend confirmation
+    
+    This scans the first-stage signals (Stoch RSI + MFI) and applies WaveTrend filter.
+    Confirmed signals move to buy database.
+    """
+    
+    # Initialize clients
+    notion = NotionClient(
+        cfg.notion.api_token,
+        cfg.notion.database_id,
+        cfg.notion.signals_database_id,
+        cfg.notion.buy_database_id
+    )
+    telegram = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
+    
+    logger.info("wavetrend_scan_started")
+    
+    # Fetch symbols from signals database
+    logger.info("fetching_signals_from_notion")
+    symbols, symbol_to_page = notion.get_signals()
+    
+    if not symbols:
+        print("⚠️  Signals database is empty")
+        return
+    
+    print(f"📋 Signals to check: {len(symbols)} symbols")
+    print(f"   {', '.join(symbols)}\n")
+    
+    # Check each symbol for WaveTrend
+    confirmed_signals = []
+    
+    for i, symbol in enumerate(symbols, 1):
+        print(f"🌊 [{i}/{len(symbols)}] Checking WaveTrend for {symbol}...", end=" ")
+        
+        has_wt_signal = check_symbol_wavetrend(symbol)
+        
+        if has_wt_signal:
+            print("✅ CONFIRMED!")
+            confirmed_signals.append(symbol)
+            
+            # Get WaveTrend values for message
+            df = daily_ohlc(symbol)
+            wt = wavetrend(df, channel_length=10, average_length=21)
+            stoch = stochastic_rsi(df['Close'])
+            mfi_val = mfi(df)
+            
+            # Send Telegram notification
+            today_str = date.today().strftime('%Y-%m-%d')
+            
+            message_lines = [
+                "🚨🚨🚨 **BUY SIGNAL CONFIRMED!** 🚨🚨🚨",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+                "",
+                f"**📈 SYMBOL: `{symbol}`**",
+                "",
+                "**✅ TWO-STAGE FILTER PASSED:**",
+                "",
+                "**🔵 Stage 1:** Stochastic RSI + MFI",
+                f"   • Stoch RSI: K={stoch['k'].iloc[-1]*100:.2f}% | D={stoch['d'].iloc[-1]*100:.2f}%",
+                f"   • MFI: {mfi_val.iloc[-1]:.2f} (3-day uptrend ✓)",
+                "",
+                "**🟢 Stage 2:** WaveTrend Confirmation",
+                f"   • WT1: {wt['wt1'].iloc[-1]:.2f}",
+                f"   • WT2: {wt['wt2'].iloc[-1]:.2f}",
+                f"   • **Oversold zone cross detected** 🎯",
+                "",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+                f"📅 **Date:** {today_str}",
+                "🚀 **ACTION: STRONG BUY CANDIDATE**",
+                "━━━━━━━━━━━━━━━━━━━━━━",
+            ]
+            message = "\n".join(message_lines)
+            
+            try:
+                telegram.send(message)
+                logger.info("wavetrend_telegram_sent", symbol=symbol)
+                
+                # Remove from signals database
+                page_id = symbol_to_page.get(symbol)
+                if page_id:
+                    notion.delete_page(page_id)
+                    print(f"   🗑️  Removed {symbol} from signals")
+                
+                # Add to buy database (if configured)
+                if cfg.notion.buy_database_id:
+                    notion.add_to_buy(symbol, date.today().isoformat())
+                    print(f"   ✅ Added {symbol} to BUY database")
+            except Exception as e:
+                logger.error("wavetrend_telegram_failed", symbol=symbol, error=str(e))
+                print(f"   ⚠️  Failed to send Telegram: {e}")
+        else:
+            print("—")
+        
+        # Small delay to avoid rate limits
+        if i < len(symbols):
+            time.sleep(2)
+    
+    # Summary
+    print(f"\n✅ WaveTrend scan complete!")
+    print(f"   Checked: {len(symbols)} symbols")
+    print(f"   Confirmed: {len(confirmed_signals)}")
+    
+    if confirmed_signals:
+        print(f"\n🎯 Confirmed buy signals:")
+        for s in confirmed_signals:
+            print(f"   • {s}")
+    
+    logger.info("wavetrend_scan_complete", total=len(symbols), confirmed=len(confirmed_signals))
+
+
 def run_continuous(cfg: Config, interval: int = 3600):
     """Run scanner continuously at specified interval"""
     
@@ -183,11 +332,23 @@ def run_continuous(cfg: Config, interval: int = 3600):
             print(f"📊 Scan Cycle {cycle}")
             print(f"{'='*60}\n")
             
+            # Stage 1: Watchlist → Stoch RSI + MFI → Signals
             try:
+                print("🔍 Stage 1: Checking watchlist (Stoch RSI + MFI)...\n")
                 run_scan(cfg)
             except Exception as e:
-                logger.error("scan_error", cycle=cycle, error=str(e))
-                print(f"❌ Error in cycle {cycle}: {e}")
+                logger.error("stage1_scan_error", cycle=cycle, error=str(e))
+                print(f"❌ Error in stage 1: {e}")
+            
+            print()  # Blank line between stages
+            
+            # Stage 2: Signals → WaveTrend → Buy
+            try:
+                print("🌊 Stage 2: Checking signals (WaveTrend)...\n")
+                run_wavetrend_scan(cfg)
+            except Exception as e:
+                logger.error("stage2_scan_error", cycle=cycle, error=str(e))
+                print(f"❌ Error in stage 2: {e}")
             
             cycle += 1
             
@@ -223,7 +384,18 @@ def main(argv: list[str] | None = None):
         
         # Run
         if args.once:
+            print("🔍 Running two-stage scan once...\n")
+            print("=" * 60)
+            print("📊 Stage 1: Watchlist (Stoch RSI + MFI)")
+            print("=" * 60 + "\n")
             run_scan(cfg)
+            
+            print("\n" + "=" * 60)
+            print("🌊 Stage 2: Signals (WaveTrend)")
+            print("=" * 60 + "\n")
+            run_wavetrend_scan(cfg)
+            
+            print("\n✅ Two-stage scan complete!")
         else:
             run_continuous(cfg, interval=args.interval)
         

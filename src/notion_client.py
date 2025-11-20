@@ -9,14 +9,15 @@ from .exceptions import ConfigError
 class NotionClient:
     """Client for interacting with Notion API to fetch watchlist"""
     
-    def __init__(self, api_token: str, database_id: str, signals_database_id: str = None):
+    def __init__(self, api_token: str, database_id: str, signals_database_id: str = None, buy_database_id: str = None):
         """
         Initialize Notion client
         
         Args:
             api_token: Notion integration token
             database_id: ID of the watchlist database
-            signals_database_id: Optional ID of signals database to move completed signals
+            signals_database_id: Optional ID of signals database (Stoch RSI + MFI signals)
+            buy_database_id: Optional ID of buy database (final confirmed signals with WaveTrend)
         """
         if not api_token or api_token.startswith("YOUR_"):
             raise ConfigError("Valid Notion API token required")
@@ -27,6 +28,7 @@ class NotionClient:
         self.api_token = api_token
         self.database_id = database_id
         self.signals_database_id = signals_database_id
+        self.buy_database_id = buy_database_id
         self.base_url = "https://api.notion.com/v1"
         self.headers = {
             "Authorization": f"Bearer {api_token}",
@@ -218,3 +220,176 @@ class NotionClient:
             logger.error("notion.add_signal_failed", symbol=symbol, error=str(e), detail=error_detail)
             print(f"   ❌ Failed to add to signals: {error_detail}")
             return False
+    
+    def get_signals(self) -> Tuple[List[str], Dict[str, str]]:
+        """
+        Fetch symbols from signals database (first-stage signals)
+        
+        Returns:
+            Tuple of (symbols list, symbol_to_page_id dict)
+            
+        Raises:
+            Exception: If signals_database_id not configured or API request fails
+        """
+        if not self.signals_database_id:
+            logger.warning("notion.no_signals_database", message="signals_database_id not configured")
+            return ([], {})
+        
+        try:
+            logger.info("notion.querying_signals_db", database_id=self.signals_database_id)
+            url = f"{self.base_url}/databases/{self.signals_database_id}/query"
+            
+            response = requests.post(url, headers=self.headers, json={})
+            response.raise_for_status()
+            
+            data = response.json()
+            results = data.get("results", [])
+            
+            if not results:
+                logger.info("notion.empty_signals")
+                return ([], {})
+            
+            # Detect title property name dynamically
+            first_page_props = results[0].get("properties", {})
+            title_property = None
+            for prop_name, prop_data in first_page_props.items():
+                if prop_data.get("type") == "title":
+                    title_property = prop_name
+                    break
+            
+            if not title_property:
+                raise ValueError("No title property found in signals database")
+            
+            symbols = []
+            symbol_to_page = {}
+            
+            for page in results:
+                page_id = page["id"]
+                props = page.get("properties", {})
+                
+                # Extract symbol from title property
+                title_data = props.get(title_property, {})
+                title_content = title_data.get("title", [])
+                
+                if title_content and len(title_content) > 0:
+                    symbol = title_content[0].get("text", {}).get("content", "").strip()
+                    if symbol:
+                        symbols.append(symbol)
+                        symbol_to_page[symbol] = page_id
+            
+            logger.info("notion.signals_fetched", count=len(symbols), symbols=symbols)
+            return (symbols, symbol_to_page)
+            
+        except Exception as e:
+            logger.error("notion.fetch_signals_failed", error=str(e))
+            raise
+    
+    def add_to_buy(self, symbol: str, signal_date: str) -> bool:
+        """
+        Add symbol to buy database (final confirmed signals with WaveTrend)
+        
+        Args:
+            symbol: Stock ticker symbol
+            signal_date: Date string (YYYY-MM-DD format)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        if not self.buy_database_id:
+            logger.warning("notion.no_buy_database", symbol=symbol)
+            return False
+        
+        try:
+            # First, query the database to get schema
+            query_url = f"{self.base_url}/databases/{self.buy_database_id}"
+            response = requests.get(query_url, headers=self.headers)
+            response.raise_for_status()
+            
+            db_info = response.json()
+            properties = db_info.get("properties", {})
+            
+            # Find title property and date property
+            title_property = None
+            date_property = None
+            
+            for prop_name, prop_data in properties.items():
+                prop_type = prop_data.get("type")
+                if prop_type == "title":
+                    title_property = prop_name
+                elif prop_type == "date":
+                    date_property = prop_name
+            
+            if not title_property:
+                raise ValueError("No title property found in buy database")
+            
+            # Build payload
+            payload = {
+                "parent": {"database_id": self.buy_database_id},
+                "properties": {
+                    title_property: {
+                        "title": [
+                            {
+                                "text": {
+                                    "content": symbol
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+            
+            # Add date if date property exists
+            if date_property:
+                payload["properties"][date_property] = {
+                    "date": {
+                        "start": signal_date
+                    }
+                }
+            
+            # Create the page
+            create_url = f"{self.base_url}/pages"
+            response = requests.post(create_url, headers=self.headers, json=payload)
+            response.raise_for_status()
+            logger.info("notion.buy_added", symbol=symbol, date=signal_date, title_prop=title_property)
+            return True
+            
+        except Exception as e:
+            error_detail = ""
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_detail = e.response.json()
+                except:
+                    error_detail = e.response.text
+            logger.error("notion.add_buy_failed", symbol=symbol, error=str(e), detail=error_detail)
+            print(f"   ❌ Failed to add to buy: {error_detail}")
+            return False
+    
+    def delete_page(self, page_id: str) -> bool:
+        """
+        Archive (delete) a page from Notion
+        
+        Args:
+            page_id: The ID of the page to delete
+            
+        Returns:
+            True if deletion successful, False otherwise
+        """
+        try:
+            delete_url = f"https://api.notion.com/v1/pages/{page_id}"
+            payload = {"archived": True}
+            
+            response = requests.patch(delete_url, headers=self.headers, json=payload)
+            response.raise_for_status()
+            logger.info("notion.page_deleted", page_id=page_id)
+            return True
+            
+        except Exception as e:
+            error_detail = ""
+            if hasattr(e, 'response') and e.response is not None:
+                try:
+                    error_detail = e.response.json()
+                except:
+                    error_detail = e.response.text
+            logger.error("notion.delete_failed", page_id=page_id, error=str(e), detail=error_detail)
+            return False
+
