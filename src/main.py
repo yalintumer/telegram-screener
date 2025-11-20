@@ -2,6 +2,7 @@
 
 import time
 import argparse
+from datetime import date
 from .config import Config
 from .notion_client import NotionClient
 from .telegram_client import TelegramClient
@@ -87,7 +88,16 @@ def run_scan(cfg: Config):
             signals_found.append(symbol)
             
             # Send Telegram notification
-            message = f"🚀 *{symbol}* Stokastik RSI AL Sinyali"
+            today_str = date.today().strftime('%Y-%m-%d')
+            
+            message_lines = [
+                "**Yeni Sinyal Tespit Edildi!** 🚀",
+                "",
+                f"**Sembol:** `{symbol}`",
+                f"**Sinyal:** Stokastik RSI (AL)",
+                f"**Tarih:** {today_str}"
+            ]
+            message = "\n".join(message_lines)
             try:
                 telegram.send(message)
                 logger.info("telegram_sent", symbol=symbol)
