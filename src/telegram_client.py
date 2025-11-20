@@ -1,5 +1,4 @@
 import requests
-from tenacity import retry, stop_after_attempt, wait_exponential
 from .logger import logger
 from .exceptions import TelegramError
 
@@ -10,11 +9,6 @@ class TelegramClient:
         self.chat_id = chat_id
         logger.info("telegram.init", chat_id=chat_id)
 
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        reraise=True
-    )
     def send(self, text: str, parse_mode: str = "Markdown"):
         """
         Send Telegram message with retry logic
