@@ -9,7 +9,7 @@ from .logger import logger
 from .exceptions import DataSourceError
 
 
-def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame:
+def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame | None:
     """
     Fetch daily OHLC data from Yahoo Finance
     
@@ -19,9 +19,7 @@ def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame:
         
     Returns:
         DataFrame with columns: Date, Open, High, Low, Close, Volume
-        
-    Raises:
-        DataSourceError: If data fetch fails
+        Returns None if data fetch fails or insufficient data
     """
     try:
         logger.info("yfinance.fetch", symbol=symbol, days=days)
@@ -36,7 +34,7 @@ def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame:
         
         if df.empty:
             logger.warning("yfinance.no_data", symbol=symbol)
-            raise DataSourceError(f"No data available for {symbol}")
+            return None
         
         # Clean and prepare data
         df = df.reset_index()
@@ -48,13 +46,11 @@ def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame:
         
         if len(df) < 14:  # Minimum needed for RSI
             logger.warning("yfinance.insufficient_data", symbol=symbol, rows=len(df))
-            raise DataSourceError(f"Insufficient data for {symbol}: only {len(df)} days")
+            return None
         
         logger.info("yfinance.success", symbol=symbol, rows=len(df))
         return df
         
-    except DataSourceError:
-        raise
     except Exception as e:
         logger.error("yfinance.error", symbol=symbol, error=str(e))
-        raise DataSourceError(f"Failed to fetch data for {symbol}: {str(e)}")
+        return None
