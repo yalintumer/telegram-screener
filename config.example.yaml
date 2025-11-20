@@ -4,8 +4,9 @@ telegram:
 
 notion:
   api_token: "YOUR_NOTION_API_TOKEN"
-  database_id: "YOUR_NOTION_DATABASE_ID"
-  signals_database_id: "YOUR_SIGNALS_DATABASE_ID"  # Optional: Leave empty or remove if not using
+  database_id: "YOUR_NOTION_DATABASE_ID"  # Watchlist database
+  signals_database_id: "YOUR_SIGNALS_DATABASE_ID"  # Stage 1 signals (Stoch RSI + MFI)
+  buy_database_id: "YOUR_BUY_DATABASE_ID"  # Stage 2 confirmed buy signals (+ WaveTrend)
 
 data:
   max_watch_days: 5
