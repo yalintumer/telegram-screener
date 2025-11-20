@@ -260,3 +260,43 @@ def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 3) -> bool:
             return True
     
     return False
+
+
+def bollinger_bands(data: pd.Series, period: int = 20, std_dev: float = 2.0) -> dict:
+    """
+    Calculate Bollinger Bands.
+    
+    Bollinger Bands consist of:
+    - Middle Band: Simple Moving Average (SMA)
+    - Upper Band: SMA + (Standard Deviation × std_dev)
+    - Lower Band: SMA - (Standard Deviation × std_dev)
+    
+    Args:
+        data: Price series (typically Close prices)
+        period: SMA period (default: 20)
+        std_dev: Number of standard deviations (default: 2.0)
+    
+    Returns:
+        dict with 'upper', 'middle', 'lower' bands as pd.Series
+    
+    Example:
+        >>> bb = bollinger_bands(df['Close'], period=20, std_dev=2.0)
+        >>> current_price = df['Close'].iloc[-1]
+        >>> if current_price < bb['lower'].iloc[-1]:
+        >>>     print("Price below lower band - oversold signal")
+    """
+    # Middle band = SMA
+    middle = data.rolling(window=period).mean()
+    
+    # Standard deviation
+    std = data.rolling(window=period).std()
+    
+    # Upper and lower bands
+    upper = middle + (std * std_dev)
+    lower = middle - (std * std_dev)
+    
+    return {
+        'upper': upper,
+        'middle': middle,
+        'lower': lower
+    }

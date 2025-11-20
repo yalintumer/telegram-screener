@@ -1,17 +1,27 @@
 # 📊 Telegram Stock Screener
 
-> Production-ready automated stock screening with **two-stage filtering system**: Stochastic RSI + MFI → WaveTrend confirmation
+> Production-ready automated stock screening with **three-stage filtering system**: Market Scanner → Stochastic RSI + MFI → WaveTrend confirmation
 
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-35%20passed-brightgreen.svg)](tests/)
+[![Tests](https://img.shields.io/badge/tests-50%20passed-brightgreen.svg)](tests/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 ---
 
 ## 🎯 What It Does
 
-**Two-Stage Filtering System for High-Confidence Buy Signals:**
+**Three-Stage Filtering System for High-Confidence Buy Signals:**
+
+### Stage 0: Market Scanner (Weekly)
+- **Scans S&P 500** for large-cap oversold opportunities
+- **Market Cap Filter**: ≥ $50B USD only
+- **Stochastic RSI (3,3,14,14)**: D < 20 (oversold)
+- **Bollinger Bands (20)**: Price < Lower Band (breakdown)
+- **MFI (14)**: ≤ 40 (weak momentum)
+- → Qualifying stocks auto-added to **Watchlist Database**
+- 🔄 **Duplicate Protection**: Updates existing entries instead of creating duplicates
+- ⏰ **Run weekly** (e.g., Sunday night) to populate watchlist automatically
 
 ### Stage 1: Initial Filter (Momentum + Volume)
 - **Stochastic RSI**: Detects oversold crossovers with sustained 2-day momentum
@@ -23,15 +33,17 @@
 - → Confirmed signals move to **Buy Database**
 - → Sends eye-catching Telegram notification 🚨
 
-**Result**: Only high-probability signals with dual confirmation reach you!
+**Result**: Only high-probability signals with triple confirmation reach you!
 
 ## ✨ Features
 
-- 🎯 **Three Advanced Indicators**: 
+- 🎯 **Four Advanced Indicators**: 
+  - Bollinger Bands (20, 2σ) - volatility breakout detection
   - Stochastic RSI (14/14/3/3) with false positive prevention
   - Money Flow Index (MFI) - volume-weighted momentum
   - WaveTrend oscillator (LazyBear's algorithm)
-- 🔄 **Hierarchical Filtering**: Two-stage confirmation system
+- 🔄 **Three-Stage Filtering**: Market scan → Initial filter → Confirmation
+- 🤖 **Automated Watchlist**: Weekly S&P 500 scan finds opportunities automatically
 - 📊 **Notion Integration**: 3 databases (Watchlist → Signals → Buy)
 - 🚀 **Production Ready**: 35/35 tests passing, comprehensive error handling
 - 🆓 **Free Data**: Uses yfinance (unlimited, no API key needed)
@@ -81,7 +93,8 @@ pytest tests/test_error_handling.py  # Error handling (14 tests)
 ```
 
 **Test Coverage:**
-- ✅ All 3 indicators validated against PineScript references
+- ✅ All 4 indicators validated against PineScript references
+- ✅ Market scanner with S&P 500 list and filters
 - ✅ Edge cases (empty data, NaN, network failures)
 - ✅ Error handling for all external APIs
 - ✅ Config validation
@@ -91,6 +104,9 @@ pytest tests/test_error_handling.py  # Error handling (14 tests)
 
 ### Core Commands
 ```bash
+# Market Scanner (Stage 0) - Run weekly to populate watchlist
+python -m src.main --market-scan
+
 # Run both scanning stages once (for testing)
 python -m src.main --once
 
@@ -103,7 +119,21 @@ python -m pytest tests/ -v
 
 ## 🏗️ Architecture
 
-### Two-Stage Filtering System
+### Three-Stage Filtering System
+
+**Stage 0: Market Scanner (Weekly)**
+```
+S&P 500 → Market Filters → Watchlist Database
+
+Filters:
+1. Market Cap ≥ $50B USD (large-cap only)
+2. Stochastic RSI (3,3,14,14): D < 20 (oversold)
+3. Bollinger Bands (20): Price < Lower Band (breakdown)
+4. MFI (14): ≤ 40 (weak momentum)
+
+Duplicate Handling: Updates existing watchlist entries instead of creating duplicates
+Run Frequency: Weekly (Sunday night recommended)
+```
 
 **Stage 1: Momentum + Volume Filter**
 ```
@@ -136,25 +166,36 @@ Result: Symbol deleted from Signals, added to Buy + Telegram alert 🚨
 
 ```
 ┌─────────────┐
-│  Watchlist  │  (Notion Database 1)
-│  Database   │
+│   S&P 500   │  (503 stocks)
+│   Market    │
 └──────┬──────┘
-       │ Stage 1: Stoch RSI + MFI
+       │ Stage 0: Market Scanner (Weekly)
+       │ • Market Cap ≥ $50B
+       │ • Stoch RSI D < 20
+       │ • Price < BB Lower
+       │ • MFI ≤ 40
+       ↓
+┌─────────────┐
+│  Watchlist  │  (Notion Database 1)
+│  Database   │  Auto-populated large-cap oversold stocks
+└──────┬──────┘
+       │ Stage 1: Stoch RSI + MFI (Hourly)
        ↓
 ┌─────────────┐
 │   Signals   │  (Notion Database 2)
-│  Database   │
+│  Database   │  Momentum + volume confirmation
 └──────┬──────┘
-       │ Stage 2: WaveTrend
+       │ Stage 2: WaveTrend (Hourly)
        ↓
 ┌─────────────┐
 │     Buy     │  (Notion Database 3)
-│  Database   │  + Telegram Alert 📱
+│  Database   │  Final trend reversal + Telegram Alert 📱
 └─────────────┘
 ```
 
 ### Duplicate Prevention
 
+- Market scanner updates existing watchlist entries instead of duplicating
 - Stage 1 skips symbols already in Signals or Buy
 - Stage 2 skips symbols already in Buy
 - No duplicate processing or notifications
@@ -165,9 +206,9 @@ Result: Symbol deleted from Signals, added to Buy + Telegram alert 🚨
 ```
 telegram-screener/
 ├── src/
-│   ├── main.py              # CLI entry point
-│   ├── watchlist.py         # Watchlist & grace period
-│   ├── indicators.py        # Stochastic RSI
+│   ├── main.py              # CLI entry point + market scanner
+│   ├── market_symbols.py    # S&P 500 symbol list
+│   ├── indicators.py        # Technical indicators (Stoch RSI, MFI, WaveTrend, BB)
 │   ├── telegram_client.py   # Telegram API
 │   ├── ui.py                # Rich UI components
 │   ├── rate_limiter.py      # Adaptive delays
@@ -242,6 +283,15 @@ TELEGRAM_CHAT_ID=987654321
 ```
 
 ## 🔧 Troubleshooting
+
+**Running market scanner:**
+```bash
+# Run once to populate watchlist from S&P 500
+python -m src.main --market-scan
+
+# Schedule weekly (add to cron):
+# 0 23 * * 0 cd /path/to/telegram-screener && python -m src.main --market-scan
+```
 
 **VM out of sync?**
 ```bash

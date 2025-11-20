@@ -469,3 +469,123 @@ class NotionClient:
             logger.error("notion.fetch_symbols_failed", database_id=database_id, error=str(e))
             return []
 
+    def add_to_watchlist(self, symbol: str, date_str: str = None) -> bool:
+        """
+        Add a symbol to the watchlist database (used by market scanner).
+        
+        Args:
+            symbol: Stock ticker symbol
+            date_str: Added date (optional, defaults to today)
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            from datetime import date as dt
+            added_date = date_str or dt.today().isoformat()
+            
+            # First, get the database schema to find the title property name
+            schema_url = f"{self.base_url}/databases/{self.database_id}"
+            schema_response = requests.get(schema_url, headers=self.headers)
+            schema_response.raise_for_status()
+            schema_data = schema_response.json()
+            
+            # Find the title property and date property
+            properties = schema_data.get("properties", {})
+            title_property = None
+            date_property = None
+            
+            for prop_name, prop_data in properties.items():
+                if prop_data.get("type") == "title":
+                    title_property = prop_name
+                # Look for "Added" date property
+                if prop_data.get("type") == "date" and "add" in prop_name.lower():
+                    date_property = prop_name
+            
+            if not title_property:
+                logger.error("notion.no_title_property", database_id=self.database_id)
+                return False
+            
+            # Build payload with dynamic property names
+            payload = {
+                "parent": {"database_id": self.database_id},
+                "properties": {
+                    title_property: {
+                        "title": [
+                            {
+                                "text": {
+                                    "content": symbol
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+            
+            # Add date if date property exists
+            if date_property:
+                payload["properties"][date_property] = {
+                    "date": {
+                        "start": added_date
+                    }
+                }
+            
+            # Create the page
+            url = f"{self.base_url}/pages"
+            response = requests.post(url, headers=self.headers, json=payload)
+            response.raise_for_status()
+            
+            logger.info("notion.watchlist_added", symbol=symbol, date=added_date)
+            return True
+            
+        except requests.exceptions.RequestException as e:
+            logger.error("notion.add_watchlist_failed", symbol=symbol, error=str(e))
+            return False
+
+    def update_watchlist_date(self, symbol: str, page_id: str = None) -> bool:
+        """
+        Update the date of an existing watchlist entry (for market scanner duplicates).
+        
+        This is used when market scanner finds a symbol that's already in watchlist.
+        Instead of adding duplicate, we update the "Added" date to current date.
+        
+        Args:
+            symbol: Stock symbol to update
+            page_id: Notion page ID (if known, otherwise will fetch)
+        
+        Returns:
+            bool: True if update successful, False otherwise
+        """
+        try:
+            # If page_id not provided, fetch it
+            if not page_id:
+                _, symbol_to_page = self.get_watchlist()
+                page_id = symbol_to_page.get(symbol)
+                
+                if not page_id:
+                    logger.warning("notion.update_date_no_page", symbol=symbol)
+                    return False
+            
+            # Update the "Added" property with current date
+            url = f"{self.base_url}/pages/{page_id}"
+            
+            payload = {
+                "properties": {
+                    "Added": {
+                        "date": {
+                            "start": None  # None means today in Notion API
+                        }
+                    }
+                }
+            }
+            
+            response = requests.patch(url, headers=self.headers, json=payload)
+            response.raise_for_status()
+            
+            logger.info("notion.watchlist_date_updated", symbol=symbol, page_id=page_id)
+            return True
+            
+        except requests.exceptions.RequestException as e:
+            logger.error("notion.update_date_failed", symbol=symbol, error=str(e))
+            return False
+

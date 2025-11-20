@@ -6,10 +6,12 @@ from datetime import date
 from .config import Config
 from .notion_client import NotionClient
 from .telegram_client import TelegramClient
-from .indicators import stochastic_rsi, stoch_rsi_buy, mfi, mfi_uptrend, wavetrend, wavetrend_buy
+from .indicators import stochastic_rsi, stoch_rsi_buy, mfi, mfi_uptrend, wavetrend, wavetrend_buy, bollinger_bands
 from .data_source_yfinance import daily_ohlc
 from .logger import logger
+from .market_symbols import get_sp500_symbols, get_market_cap_threshold
 import sentry_sdk
+import yfinance as yf
 
 sentry_sdk.init(
     dsn="https://419f2c57fd95ab96c48f859f9b7ed347@o4510393252839424.ingest.de.sentry.io/4510393259196496",
@@ -53,6 +55,174 @@ def check_symbol_wavetrend(symbol: str) -> bool:
     except Exception as e:
         logger.error("wavetrend_check_failed", symbol=symbol, error=str(e))
         return False
+
+
+def check_market_filter(symbol: str) -> dict:
+    """
+    Check if symbol passes market scanner filters (Stage 0).
+    
+    Filters:
+    1. Market Cap >= 50B USD
+    2. Stoch RSI (3,3,14,14) - D < 20
+    3. Price < Bollinger Lower Band (20 period)
+    4. MFI (14) <= 40
+    
+    Returns:
+        dict with 'passed' (bool) and indicator values, or None if data unavailable
+    """
+    try:
+        logger.info("market_filter_check", symbol=symbol)
+        
+        # Get price data
+        df = daily_ohlc(symbol)
+        
+        if df is None or len(df) < 30:
+            logger.warning("market_filter_insufficient_data", symbol=symbol)
+            return None
+        
+        # 1. Check Market Cap >= 50B USD
+        try:
+            ticker = yf.Ticker(symbol)
+            info = ticker.info
+            market_cap = info.get('marketCap', 0)
+            
+            if market_cap < get_market_cap_threshold():
+                logger.info("market_filter_market_cap_too_low", symbol=symbol, 
+                           market_cap=market_cap, threshold=get_market_cap_threshold())
+                return {'passed': False, 'reason': 'market_cap_too_low'}
+        
+        except Exception as e:
+            logger.warning("market_filter_market_cap_error", symbol=symbol, error=str(e))
+            return None
+        
+        # 2. Calculate Stochastic RSI (3,3,14,14)
+        stoch_ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
+        stoch_d = float(stoch_ind['d'].iloc[-1])
+        stoch_k = float(stoch_ind['k'].iloc[-1])
+        
+        if stoch_d >= 20:
+            logger.info("market_filter_stoch_not_oversold", symbol=symbol, stoch_d=stoch_d)
+            return {'passed': False, 'reason': 'stoch_d_not_oversold', 'stoch_d': stoch_d}
+        
+        # 3. Check Bollinger Bands - Price < Lower Band
+        bb = bollinger_bands(df['Close'], period=20, std_dev=2.0)
+        current_price = float(df['Close'].iloc[-1])
+        bb_lower = float(bb['lower'].iloc[-1])
+        
+        if current_price >= bb_lower:
+            logger.info("market_filter_price_not_below_bb", symbol=symbol, 
+                       price=current_price, bb_lower=bb_lower)
+            return {'passed': False, 'reason': 'price_not_below_bb', 
+                   'price': current_price, 'bb_lower': bb_lower}
+        
+        # 4. Check MFI <= 40
+        mfi_values = mfi(df, period=14)
+        mfi_current = float(mfi_values.iloc[-1])
+        
+        if mfi_current > 40:
+            logger.info("market_filter_mfi_too_high", symbol=symbol, mfi=mfi_current)
+            return {'passed': False, 'reason': 'mfi_too_high', 'mfi': mfi_current}
+        
+        # All filters passed!
+        logger.info("market_filter_passed", symbol=symbol, 
+                   market_cap=market_cap, stoch_d=stoch_d, stoch_k=stoch_k,
+                   price=current_price, bb_lower=bb_lower, mfi=mfi_current)
+        
+        return {
+            'passed': True,
+            'market_cap': market_cap,
+            'stoch_d': stoch_d,
+            'stoch_k': stoch_k,
+            'price': current_price,
+            'bb_lower': bb_lower,
+            'mfi': mfi_current
+        }
+        
+    except Exception as e:
+        logger.error("market_filter_check_failed", symbol=symbol, error=str(e))
+        return None
+
+
+def run_market_scan(cfg: Config) -> None:
+    """
+    Run market scanner to find stocks matching Stage 0 filters.
+    
+    Scans S&P 500 stocks and adds qualifying ones to Notion Watchlist.
+    If symbol already exists in watchlist, updates the date instead of creating duplicate.
+    No Telegram notification for market scanner results.
+    
+    This should run weekly (e.g., Sunday night before market opens).
+    """
+    logger.info("market_scan_started")
+    
+    # Initialize clients
+    notion = NotionClient(
+        api_token=cfg.notion_api_token,
+        database_id=cfg.notion_database_id,
+        signals_database_id=cfg.signals_database_id,
+        buy_database_id=cfg.buy_database_id
+    )
+    
+    # Get current watchlist (for duplicate checking)
+    existing_symbols, symbol_to_page = notion.get_watchlist()
+    existing_set = set(existing_symbols)
+    
+    # Get S&P 500 symbols
+    sp500_symbols = get_sp500_symbols()
+    logger.info("market_scan_symbols_loaded", count=len(sp500_symbols))
+    
+    # Track results
+    found_count = 0
+    updated_count = 0
+    added_count = 0
+    
+    print(f"\n🔍 Market Scanner: Analyzing {len(sp500_symbols)} S&P 500 stocks...")
+    print(f"📊 Filters: Market Cap ≥50B, Stoch RSI D<20, Price<BB Lower, MFI≤40\n")
+    
+    # Scan each symbol
+    for i, symbol in enumerate(sp500_symbols, 1):
+        # Progress indicator every 50 symbols
+        if i % 50 == 0:
+            print(f"   Progress: {i}/{len(sp500_symbols)} symbols scanned...")
+        
+        # Check market filters
+        result = check_market_filter(symbol)
+        
+        if result and result.get('passed'):
+            found_count += 1
+            
+            # Check if already in watchlist
+            if symbol in existing_set:
+                # Update date instead of adding duplicate
+                success = notion.update_watchlist_date(symbol, page_id=symbol_to_page.get(symbol))
+                if success:
+                    updated_count += 1
+                    print(f"   ✅ {symbol}: Already in watchlist, date updated")
+            else:
+                # Add to watchlist
+                success = notion.add_to_watchlist(symbol)
+                if success:
+                    added_count += 1
+                    print(f"   🆕 {symbol}: Added to watchlist")
+                    print(f"      Market Cap: ${result['market_cap']/1e9:.1f}B")
+                    print(f"      Stoch RSI D: {result['stoch_d']:.1f}, K: {result['stoch_k']:.1f}")
+                    print(f"      Price: ${result['price']:.2f} < BB Lower: ${result['bb_lower']:.2f}")
+                    print(f"      MFI: {result['mfi']:.1f}")
+        
+        # Rate limiting: 0.5 second per request (max 2000 req/hour with yfinance)
+        time.sleep(0.5)
+    
+    # Summary
+    print(f"\n" + "=" * 60)
+    print(f"📈 Market Scan Complete!")
+    print(f"=" * 60)
+    print(f"   Stocks matching filters: {found_count}")
+    print(f"   New additions to watchlist: {added_count}")
+    print(f"   Existing entries updated: {updated_count}")
+    print(f"=" * 60 + "\n")
+    
+    logger.info("market_scan_completed", 
+                found=found_count, added=added_count, updated=updated_count)
 
 
 def check_symbol(symbol: str) -> bool:
@@ -410,13 +580,26 @@ def main(argv: list[str] | None = None):
     parser.add_argument("--once", action="store_true",
                        help="Run once and exit (default: continuous)")
     
+    parser.add_argument("--market-scan", action="store_true",
+                       help="Run market scanner (Stage 0) to populate watchlist from S&P 500")
+    
     args = parser.parse_args(argv)
     
     try:
         # Load config
         cfg = Config.load(args.config)
         
-        # Run
+        # Run market scanner (Stage 0)
+        if args.market_scan:
+            print("🔍 Running Market Scanner (Stage 0)...\n")
+            print("=" * 60)
+            print("📊 Analyzing S&P 500 for Watchlist Population")
+            print("=" * 60 + "\n")
+            run_market_scan(cfg)
+            print("\n✅ Market scan complete!")
+            return 0
+        
+        # Run Stage 1 + Stage 2
         if args.once:
             print("🔍 Running two-stage scan once...\n")
             print("=" * 60)
