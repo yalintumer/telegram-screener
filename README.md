@@ -1,31 +1,43 @@
 # 📊 Telegram Stock Screener
 
-> Production-ready automated TradingView symbol screening with Stochastic RSI signals via Telegram
+> Production-ready automated stock screening with **two-stage filtering system**: Stochastic RSI + MFI → WaveTrend confirmation
 
 [![Python 3.13+](https://img.shields.io/badge/python-3.13+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-35%20passed-brightgreen.svg)](tests/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
 ---
 
 ## 🎯 What It Does
 
-1. **Capture** → Screenshot TradingView screener, extract symbols via OCR
-2. **Scan** → Check Stochastic RSI for buy signals (K crosses D in oversold)
-3. **Alert** → Send Telegram notifications for buy signals
-4. **Monitor** → Track system health, statistics, and watchlist status
-5. **Repeat** → Runs continuously in production (Docker/systemd)
+**Two-Stage Filtering System for High-Confidence Buy Signals:**
+
+### Stage 1: Initial Filter (Momentum + Volume)
+- **Stochastic RSI**: Detects oversold crossovers with sustained 2-day momentum
+- **MFI (Money Flow Index)**: Confirms 3-day volume-weighted uptrend
+- → Signals move to **Signals Database**
+
+### Stage 2: Confirmation Filter (Trend Reversal)
+- **WaveTrend (LazyBear)**: Validates oversold zone cross (WT1 > WT2)
+- → Confirmed signals move to **Buy Database**
+- → Sends eye-catching Telegram notification 🚨
+
+**Result**: Only high-probability signals with dual confirmation reach you!
 
 ## ✨ Features
 
-- 🎯 **Advanced Technical Analysis**: Stochastic RSI with customizable parameters
-- 📸 **Intelligent OCR**: Extracts symbols from TradingView screenshots
-- 🔄 **Grace Period System**: Prevents duplicate signals with business-day tracking
-- 📊 **Health Monitoring**: Built-in status tracking and statistics
-- 🚀 **Production Ready**: Systemd service, Docker support, comprehensive logging
+- 🎯 **Three Advanced Indicators**: 
+  - Stochastic RSI (14/14/3/3) with false positive prevention
+  - Money Flow Index (MFI) - volume-weighted momentum
+  - WaveTrend oscillator (LazyBear's algorithm)
+- 🔄 **Hierarchical Filtering**: Two-stage confirmation system
+- 📊 **Notion Integration**: 3 databases (Watchlist → Signals → Buy)
+- 🚀 **Production Ready**: 35/35 tests passing, comprehensive error handling
 - 🆓 **Free Data**: Uses yfinance (unlimited, no API key needed)
-- ⚡ **Adaptive Rate Limiting**: Smart delays based on error patterns
-- 🎨 **Beautiful CLI**: Rich terminal UI with progress bars and tables
+- ⚡ **Smart Duplicate Prevention**: No repeated processing across databases
+- 📱 **Enhanced Telegram Alerts**: Rich formatted notifications with indicator values
+- 🎨 **Beautiful CLI**: Rich terminal UI with progress bars
 
 ## 🚀 Quick Start
 
@@ -38,16 +50,12 @@ source venv/bin/activate
 pip install -r requirements.txt
 
 # Configure
-cp .env.example .env
-nano .env  # Add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID
-
 cp config.example.yaml config.yaml
-nano config.yaml  # Adjust settings if needed
+nano config.yaml  # Add your Notion API tokens and database IDs
 
 # Test
-python -m src.main add AAPL MSFT GOOGL
-python -m src.main list
-python -m src.main status
+python -m src.main --once  # Run both stages once
+python -m pytest tests/ -v # Run test suite (35 tests)
 
 # Deploy as Service
 # macOS:
@@ -59,114 +67,98 @@ python deploy_service.py install
 python deploy_service.py start
 ```
 
-## 📚 Documentation
+## 🧪 Testing
 
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - Production deployment guide (systemd, Docker)
-- **[API Documentation](docs/)** - Detailed API and configuration docs
-- **Commands** - See `python -m src.main --help`
+Comprehensive test suite with 100% pass rate:
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Test categories:
+pytest tests/test_indicators.py      # Indicator calculations (21 tests)
+pytest tests/test_error_handling.py  # Error handling (14 tests)
+```
+
+**Test Coverage:**
+- ✅ All 3 indicators validated against PineScript references
+- ✅ Edge cases (empty data, NaN, network failures)
+- ✅ Error handling for all external APIs
+- ✅ Config validation
+- ✅ End-to-end integration tests
 
 ## 🎮 Commands
 
 ### Core Commands
 ```bash
-# Capture symbols from TradingView screenshot
-python -m src.main capture
+# Run both scanning stages once (for testing)
+python -m src.main --once
 
-# Scan watchlist for buy signals
-python -m src.main scan
+# Continuous mode (scans every hour by default)
+python -m src.main --interval 3600
 
-# Continuous mode (capture once, then scan every hour)
-python -m src.main run --interval 3600
-
-# System status and health monitoring
-python -m src.main status
-```
-
-### Watchlist Management
-```bash
-# Show watchlist
-python -m src.main list
-
-# Add symbols manually
-python -m src.main add AAPL MSFT GOOGL
-
-# Remove symbols
-python -m src.main remove AAPL MSFT
-
-# Clear all symbols (with confirmation)
-python -m src.main clear
-
-# Debug specific symbol
-python -m src.main debug AAPL
-```
-
-### Advanced Options
-```bash
-# Dry run (no changes, no messages sent)
-python -m src.main scan --dry-run
-
-# Parallel scanning (faster, but careful with rate limits)
-python -m src.main scan --parallel
-
-# Custom sleep between symbols
-python -m src.main scan --sleep 20
-
-# Click before capture (for window focus)
-python -m src.main capture --click 150,50
+# Run test suite
+python -m pytest tests/ -v
 ```
 
 ## 🏗️ Architecture
 
-### Signal Detection
+### Two-Stage Filtering System
 
-**Stochastic RSI:**
+**Stage 1: Momentum + Volume Filter**
 ```
-1. Calculate RSI (14 periods)
-2. Stochastic of RSI (14 periods)
-3. K line = 3-day SMA of Stochastic
-4. D line = 3-day SMA of K
-5. Buy signal = K crosses above D when both < 20 (oversold)
-```
+Watchlist → Stochastic RSI + MFI → Signals Database
 
-### Grace Period
-
-After sending a signal, symbol enters **5 business day grace period**:
-- Prevents spam alerts
-- VM filters grace period symbols before scanning
-- Local Mac sends raw symbols (no grace check)
-
-### Architecture
-
-```
-Local Mac → GitHub → VM (Ubuntu)
-   ↓          ↓          ↓
-Capture    Sync     Scan every hour
-   ↓          ↓          ↓
-OCR        Git      Telegram alerts
+Conditions:
+1. Stochastic RSI (14/14/3/3):
+   - K crosses above D in oversold zone (< 20%)
+   - K shows sustained 2-day uptrend (prevents false positives)
+   
+2. Money Flow Index (14-period):
+   - 3 consecutive days of rising MFI
+   - Volume-weighted momentum confirmation
 ```
 
-## 🌐 VM Setup
+**Stage 2: Trend Reversal Confirmation**
+```
+Signals Database → WaveTrend → Buy Database
 
-```bash
-# On VM (Ubuntu)
-git clone https://github.com/yalintumer/telegram-screener.git
-cd telegram-screener
-python3.13 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+Conditions:
+1. WaveTrend (LazyBear, 10/21):
+   - WT1 crosses above WT2
+   - Cross occurs in oversold zone (< -53)
+   - Final confirmation of trend reversal
 
-# Configure
-cp .env.example .env
-nano .env
-
-# Install service
-sudo cp deploy/telegram-screener.service /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable telegram-screener
-sudo systemctl start telegram-screener
+Result: Symbol deleted from Signals, added to Buy + Telegram alert 🚨
 ```
 
-**Service runs:** `run_scan_only.sh` → scans every 3600 seconds
+### System Flow
+
+```
+┌─────────────┐
+│  Watchlist  │  (Notion Database 1)
+│  Database   │
+└──────┬──────┘
+       │ Stage 1: Stoch RSI + MFI
+       ↓
+┌─────────────┐
+│   Signals   │  (Notion Database 2)
+│  Database   │
+└──────┬──────┘
+       │ Stage 2: WaveTrend
+       ↓
+┌─────────────┐
+│     Buy     │  (Notion Database 3)
+│  Database   │  + Telegram Alert 📱
+└─────────────┘
+```
+
+### Duplicate Prevention
+
+- Stage 1 skips symbols already in Signals or Buy
+- Stage 2 skips symbols already in Buy
+- No duplicate processing or notifications
+- Efficient API usage
 
 ## 📂 Project Structure
 
