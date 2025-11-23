@@ -247,10 +247,10 @@ def run_market_scan(cfg: Config) -> None:
     
     # Initialize clients
     notion = NotionClient(
-        api_token=cfg.notion_api_token,
-        database_id=cfg.notion_database_id,
-        signals_database_id=cfg.signals_database_id,
-        buy_database_id=cfg.buy_database_id
+        api_token=cfg.notion.api_token,
+        database_id=cfg.notion.database_id,
+        signals_database_id=cfg.notion.signals_database_id,
+        buy_database_id=cfg.notion.buy_database_id
     )
     
     # Get current watchlist (for duplicate checking)
@@ -319,9 +319,9 @@ def run_market_scan(cfg: Config) -> None:
     print("\n💾 Backing up Notion databases...")
     backup = NotionBackup()
     databases = {
-        "watchlist": cfg.notion_database_id,
-        "signals": cfg.signals_database_id,
-        "buy": cfg.buy_database_id
+        "watchlist": cfg.notion.database_id,
+        "signals": cfg.notion.signals_database_id,
+        "buy": cfg.notion.buy_database_id
     }
     backup_files = backup.backup_all(notion, databases)
     
@@ -341,7 +341,7 @@ def run_market_scan(cfg: Config) -> None:
         
         # Send report via Telegram
         try:
-            telegram = TelegramClient(cfg.telegram_bot_token, cfg.telegram_chat_id)
+            telegram = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
             telegram.send(f"```\n{report}\n```")
             analytics.mark_report_sent()
             print("   ✅ Weekly report sent via Telegram")
