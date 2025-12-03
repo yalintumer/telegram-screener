@@ -1,0 +1,14 @@
+{
+  "market_scans": [
+    {
+      "timestamp": "2025-11-20T16:18:54.811808",
+      "found": 10,
+      "added": 5,
+      "updated": 2
+    }
+  ],
+  "stage1_scans": [],
+  "stage2_scans": [],
+  "alerts_sent": [],
+  "last_report_date": null
+}

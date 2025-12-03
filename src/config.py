@@ -24,6 +24,7 @@ class TelegramConfig(BaseModel):
 class APIConfig(BaseModel):
     provider: str = Field(default="yfinance")
     token: str = Field(default="", description="API token (not needed for yfinance)")
+    alpha_vantage_key: str = Field(default="", description="Alpha Vantage API key for precise indicators")
     rate_limit_per_minute: int = Field(default=5, ge=1, le=60)
     
     @field_validator('provider')

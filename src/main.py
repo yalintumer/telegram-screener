@@ -8,6 +8,7 @@ from .notion_client import NotionClient
 from .telegram_client import TelegramClient
 from .indicators import stochastic_rsi, stoch_rsi_buy, mfi, mfi_uptrend, wavetrend, wavetrend_buy, bollinger_bands
 from .data_source_yfinance import daily_ohlc, weekly_ohlc
+from .data_source_alpha_vantage import alpha_vantage_ohlc
 from .logger import logger
 from .market_symbols import get_sp500_symbols, get_market_cap_threshold
 from .signal_tracker import SignalTracker
@@ -124,9 +125,13 @@ def check_symbol_wavetrend(symbol: str, use_multi_timeframe: bool = True) -> boo
         return False
 
 
-def check_market_filter(symbol: str, cache: MarketCapCache = None) -> dict:
+def check_market_filter(symbol: str, cache: MarketCapCache = None, alpha_vantage_key: str = None) -> dict:
     """
     Check if symbol passes market scanner filters (Stage 0).
+    
+    Uses hybrid approach:
+    - yfinance: Market cap (fast, unlimited)
+    - Alpha Vantage: Technical indicators (precise, if key provided)
     
     Filters:
     1. Market Cap >= 50B USD (cached for 24h)
@@ -137,15 +142,24 @@ def check_market_filter(symbol: str, cache: MarketCapCache = None) -> dict:
     Args:
         symbol: Stock symbol
         cache: Optional MarketCapCache instance for performance
+        alpha_vantage_key: Optional Alpha Vantage API key for precise indicators
     
     Returns:
         dict with 'passed' (bool) and indicator values, or None if data unavailable
     """
     try:
-        logger.info("market_filter_check", symbol=symbol)
+        logger.info("market_filter_check", symbol=symbol, 
+                   using_alpha_vantage=bool(alpha_vantage_key))
         
-        # Get price data
-        df = daily_ohlc(symbol)
+        # Get price data - use Alpha Vantage if available, else yfinance
+        if alpha_vantage_key:
+            df = alpha_vantage_ohlc(symbol, alpha_vantage_key, days=100)
+            if df is None:
+                # Fallback to yfinance
+                logger.warning("alpha_vantage_failed_fallback_yfinance", symbol=symbol)
+                df = daily_ohlc(symbol)
+        else:
+            df = daily_ohlc(symbol)
         
         if df is None or len(df) < 30:
             logger.warning("market_filter_insufficient_data", symbol=symbol)
@@ -266,9 +280,17 @@ def run_market_scan(cfg: Config) -> None:
     updated_count = 0
     added_count = 0
     
+    # Get Alpha Vantage key (if configured)
+    alpha_vantage_key = cfg.api.alpha_vantage_key if hasattr(cfg.api, 'alpha_vantage_key') and cfg.api.alpha_vantage_key else None
+    data_source = "Alpha Vantage" if alpha_vantage_key else "yfinance"
+    
     print(f"\n🔍 Market Scanner: Analyzing {len(sp500_symbols)} S&P 500 stocks...")
     print(f"📊 Filters: Market Cap ≥50B, Stoch RSI D<20, Price<BB Lower, MFI≤40")
-    print(f"💾 Cache: {cache_stats['valid_entries']} valid entries, {cache_stats['expired_entries']} expired\n")
+    print(f"💾 Cache: {cache_stats['valid_entries']} valid entries, {cache_stats['expired_entries']} expired")
+    print(f"📡 Data Source: {data_source} (market cap: yfinance)")
+    if alpha_vantage_key:
+        print(f"   ⚡ Using Alpha Vantage for precise technical indicators")
+    print()
     
     # Scan each symbol
     for i, symbol in enumerate(sp500_symbols, 1):
@@ -276,8 +298,8 @@ def run_market_scan(cfg: Config) -> None:
         if i % 50 == 0:
             print(f"   Progress: {i}/{len(sp500_symbols)} symbols scanned...")
         
-        # Check market filters (with cache)
-        result = check_market_filter(symbol, cache=cache)
+        # Check market filters (with cache and optional Alpha Vantage)
+        result = check_market_filter(symbol, cache=cache, alpha_vantage_key=alpha_vantage_key)
         
         if result and result.get('passed'):
             found_count += 1

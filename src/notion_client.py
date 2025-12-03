@@ -556,6 +556,8 @@ class NotionClient:
         Returns:
             bool: True if update successful, False otherwise
         """
+        from datetime import date as date_module
+        
         try:
             # If page_id not provided, fetch it
             if not page_id:
@@ -569,11 +571,14 @@ class NotionClient:
             # Update the "Added" property with current date
             url = f"{self.base_url}/pages/{page_id}"
             
+            # Get today's date in ISO format (YYYY-MM-DD)
+            today = date_module.today().isoformat()
+            
             payload = {
                 "properties": {
                     "Added": {
                         "date": {
-                            "start": None  # None means today in Notion API
+                            "start": today
                         }
                     }
                 }
