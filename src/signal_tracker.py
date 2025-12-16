@@ -187,13 +187,21 @@ class SignalTracker:
                 # Calculate performance (price change after N days)
                 # Find the row closest to days_after from signal date
                 target_date = signal_date + timedelta(days=days_after)
-                # Normalize index to date for comparison (handles both DatetimeIndex and date index)
-                df_dates = df.index.normalize() if hasattr(df.index, 'normalize') else df.index
-                target_date_normalized = target_date.date() if hasattr(target_date, 'date') else target_date
-                # Compare using pandas Timestamp for consistency
+
+                # Convert both sides to pandas DatetimeIndex for safe comparison
+                # This handles numpy.ndarray vs Timestamp incompatibility
                 import pandas as pd
-                target_ts = pd.Timestamp(target_date_normalized)
-                future_prices = df[df_dates >= target_ts]
+                target_ts = pd.Timestamp(target_date).normalize()
+
+                # Convert index to DatetimeIndex, remove timezone, then normalize
+                # This handles: DatetimeIndex, numpy.datetime64, timezone-aware
+                idx = pd.DatetimeIndex(df.index)
+                if idx.tz is not None:
+                    idx = idx.tz_localize(None)  # Remove timezone
+                idx = idx.normalize()
+
+                # Now both are timezone-naive DatetimeIndex - comparison is safe
+                future_prices = df.loc[idx >= target_ts]
 
                 if len(future_prices) > 0:
                     future_price = float(future_prices["Close"].iloc[0])

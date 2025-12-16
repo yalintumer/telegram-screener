@@ -532,3 +532,110 @@ class TestGetAllStatsAlias:
         assert stats["pending"] == 0
         assert stats["avg_return"] is None
         assert stats["win_rate"] is None
+
+
+class TestSignalPerformanceTimestampComparison:
+    """Regression tests for numpy.ndarray vs Timestamp comparison bug."""
+
+    def test_update_performance_with_datetime_index(self, tmp_path):
+        """Should handle DatetimeIndex without numpy/Timestamp comparison error."""
+        import numpy as np
+
+        data_file = tmp_path / "signals.json"
+        tracker = SignalTracker(data_file=str(data_file))
+
+        # Add a signal from 10 days ago
+        signal_date = datetime.now() - timedelta(days=10)
+        tracker.data["signal_history"] = [{
+            "symbol": "TEST",
+            "date": signal_date.isoformat(),
+            "data": {"price": 100.0}
+        }]
+
+        # Mock daily_ohlc to return DataFrame with DatetimeIndex
+        mock_df = pd.DataFrame({
+            "Open": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0],
+            "High": [101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0],
+            "Low": [99.0, 100.0, 101.0, 102.0, 103.0, 104.0, 105.0],
+            "Close": [100.5, 101.5, 102.5, 103.5, 104.5, 105.5, 106.5],
+            "Volume": [1000000] * 7
+        }, index=pd.DatetimeIndex([
+            signal_date + timedelta(days=i) for i in range(7)
+        ]))
+
+        with patch("src.data_source_yfinance.daily_ohlc", return_value=mock_df):
+            # This should NOT raise: '>=' not supported between 'numpy.ndarray' and 'Timestamp'
+            result = tracker.update_signal_performance("TEST", days_after=5)
+
+        # Verify performance was calculated
+        assert tracker.data["signal_history"][0].get("performance") is not None
+        perf = tracker.data["signal_history"][0]["performance"]
+        assert "return_pct" in perf
+        assert perf["days_after"] == 5
+
+    def test_update_performance_with_numpy_datetime64_index(self, tmp_path):
+        """Should handle numpy.datetime64 index without comparison error."""
+        import numpy as np
+
+        data_file = tmp_path / "signals.json"
+        tracker = SignalTracker(data_file=str(data_file))
+
+        signal_date = datetime.now() - timedelta(days=10)
+        tracker.data["signal_history"] = [{
+            "symbol": "TEST",
+            "date": signal_date.isoformat(),
+            "data": {"price": 100.0}
+        }]
+
+        # Create DataFrame with numpy.datetime64 index (common from yfinance)
+        dates = np.array([
+            signal_date + timedelta(days=i) for i in range(7)
+        ], dtype="datetime64[ns]")
+
+        mock_df = pd.DataFrame({
+            "Open": [100.0] * 7,
+            "High": [101.0] * 7,
+            "Low": [99.0] * 7,
+            "Close": [100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0],
+            "Volume": [1000000] * 7
+        }, index=dates)
+
+        with patch("src.data_source_yfinance.daily_ohlc", return_value=mock_df):
+            # Should not raise TypeError
+            result = tracker.update_signal_performance("TEST", days_after=5)
+
+        assert tracker.data["signal_history"][0].get("performance") is not None
+
+    def test_update_performance_handles_timezone_aware_index(self, tmp_path):
+        """Should handle timezone-aware DatetimeIndex."""
+        data_file = tmp_path / "signals.json"
+        tracker = SignalTracker(data_file=str(data_file))
+
+        signal_date = datetime.now() - timedelta(days=10)
+        tracker.data["signal_history"] = [{
+            "symbol": "TEST",
+            "date": signal_date.isoformat(),
+            "data": {"price": 100.0}
+        }]
+
+        # Create timezone-aware index (like real yfinance data)
+        dates = pd.date_range(
+            start=signal_date,
+            periods=7,
+            freq="D",
+            tz="America/New_York"
+        )
+
+        mock_df = pd.DataFrame({
+            "Open": [100.0] * 7,
+            "High": [101.0] * 7,
+            "Low": [99.0] * 7,
+            "Close": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0],
+            "Volume": [1000000] * 7
+        }, index=dates)
+
+        with patch("src.data_source_yfinance.daily_ohlc", return_value=mock_df):
+            # Should handle timezone conversion gracefully
+            result = tracker.update_signal_performance("TEST", days_after=5)
+
+        assert tracker.data["signal_history"][0].get("performance") is not None
