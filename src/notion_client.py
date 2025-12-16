@@ -1,4 +1,4 @@
-"""Notion API client for fetching watchlist from database"""
+"""Notion API client for managing signals and buy databases"""
 
 from typing import List, Dict, Tuple, Optional
 import requests
@@ -10,26 +10,27 @@ NOTION_TIMEOUT = 30
 
 
 class NotionClient:
-    """Client for interacting with Notion API to fetch watchlist"""
+    """Client for interacting with Notion API - Signals and Buy databases"""
     
-    def __init__(self, api_token: str, database_id: str, signals_database_id: str = None, buy_database_id: str = None):
+    def __init__(self, api_token: str, database_id: str = None, signals_database_id: str = None, buy_database_id: str = None):
         """
         Initialize Notion client
         
         Args:
             api_token: Notion integration token
-            database_id: ID of the watchlist database
-            signals_database_id: Optional ID of signals database (Stoch RSI + MFI signals)
-            buy_database_id: Optional ID of buy database (final confirmed signals with WaveTrend)
+            database_id: DEPRECATED - Old watchlist database ID (kept for backward compatibility)
+            signals_database_id: ID of signals database (Stoch RSI + MFI signals)
+            buy_database_id: ID of buy database (final confirmed signals with WaveTrend)
         """
         if not api_token or api_token.startswith("YOUR_"):
             raise ConfigError("Valid Notion API token required")
         
-        if not database_id or database_id.startswith("YOUR_"):
-            raise ConfigError("Valid Notion database ID required")
+        # signals_database_id is now required
+        if not signals_database_id or signals_database_id.startswith("YOUR_"):
+            raise ConfigError("Valid signals_database_id required")
         
         self.api_token = api_token
-        self.database_id = database_id
+        self.database_id = database_id  # Deprecated but kept for compatibility
         self.signals_database_id = signals_database_id
         self.buy_database_id = buy_database_id
         self.base_url = "https://api.notion.com/v1"

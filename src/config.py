@@ -61,16 +61,16 @@ class TesseractConfig(BaseModel):
 
 
 class NotionConfig(BaseModel):
-    """Notion API configuration for fetching watchlist"""
+    """Notion API configuration - only signals_database_id and buy_database_id are required"""
     api_token: str = Field(..., description="Notion integration token")
-    database_id: str = Field(..., description="Database ID containing watchlist")
-    signals_database_id: Optional[str] = Field(default=None, description="Optional: Database ID for first-stage signals (Stoch RSI + MFI)")
-    buy_database_id: Optional[str] = Field(default=None, description="Optional: Database ID for confirmed buy signals (+ WaveTrend)")
+    database_id: Optional[str] = Field(default=None, description="DEPRECATED: Old watchlist database ID (no longer used)")
+    signals_database_id: str = Field(..., description="Database ID for first-stage signals")
+    buy_database_id: str = Field(..., description="Database ID for confirmed buy signals")
     
-    @field_validator('api_token', 'database_id')
+    @field_validator('api_token', 'signals_database_id', 'buy_database_id')
     @classmethod
     def not_placeholder(cls, v: str) -> str:
-        if v.startswith('YOUR_'):
+        if v and v.startswith('YOUR_'):
             raise ValueError('Replace placeholder values in config')
         return v
 

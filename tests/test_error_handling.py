@@ -15,23 +15,23 @@ class TestNotionClientErrorHandling:
     def test_invalid_api_token(self):
         """Test with invalid API token"""
         with pytest.raises(ConfigError):
-            NotionClient("YOUR_TOKEN", "database_id")
+            NotionClient("YOUR_TOKEN", signals_database_id="signals_db", buy_database_id="buy_db")
     
-    def test_invalid_database_id(self):
-        """Test with invalid database ID"""
+    def test_invalid_signals_database_id(self):
+        """Test with invalid signals database ID"""
         with pytest.raises(ConfigError):
-            NotionClient("valid_token", "YOUR_DATABASE")
+            NotionClient("valid_token", signals_database_id="YOUR_DATABASE", buy_database_id="buy_db")
     
     @patch('requests.post')
     def test_network_error_handling(self, mock_post):
         """Test handling of network errors"""
         mock_post.side_effect = Exception("Network error")
         
-        client = NotionClient("ntn_test123", "db123")
+        client = NotionClient("ntn_test123", signals_database_id="signals_db", buy_database_id="buy_db")
         
-        # Network error should raise exception (this is a critical failure)
+        # Network error should raise exception
         with pytest.raises(Exception) as exc_info:
-            symbols, mapping = client.get_watchlist()
+            symbols, mapping = client.get_signals()
         
         assert "Network error" in str(exc_info.value)
     
@@ -41,8 +41,8 @@ class TestNotionClientErrorHandling:
         mock_post.return_value.json.return_value = {"results": []}
         mock_post.return_value.raise_for_status = Mock()
         
-        client = NotionClient("ntn_test123", "db123")
-        symbols, mapping = client.get_watchlist()
+        client = NotionClient("ntn_test123", signals_database_id="signals_db", buy_database_id="buy_db")
+        symbols, mapping = client.get_signals()
         
         assert symbols == []
         assert mapping == {}

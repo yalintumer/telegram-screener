@@ -243,23 +243,26 @@ def check_market_filter(symbol: str, cache: MarketCapCache = None, alpha_vantage
 
 def run_market_scan(cfg: Config) -> None:
     """
-    Run market scanner to find stocks matching Stage 0 filters.
+    Run combined market scanner (Stage 0+1): S&P 500 → filter + signal → Signals DB.
     
-    Scans S&P 500 stocks and adds qualifying ones to Notion Watchlist.
-    If symbol already exists in watchlist, updates the date instead of creating duplicate.
-    No Telegram notification for market scanner results.
+    This combines the old Stage 0 (market filter) and Stage 1 (signal check) into
+    a single pass. Stocks that pass both filters go directly to Signals database.
     
-    Features:
-    - Market cap caching (24h TTL) for faster scanning
-    - Progress tracking every 50 symbols
+    Filters (must pass ALL):
+    1. Market Cap >= 50B USD (cached for 24h)
+    2. Stoch RSI (3,3,14,14) - D < 20 (oversold)
+    3. Price < Bollinger Lower Band (20 period)
+    4. MFI (14) <= 40 (oversold)
+    5. Stoch RSI bullish cross (K crosses above D in oversold zone)
+    6. MFI in 3-day uptrend
     
-    This should run weekly (e.g., Sunday night before market opens).
+    No Telegram notification - that happens in Stage 2 (WaveTrend confirmation).
     """
     logger.info("market_scan_started")
     
     # Initialize cache for market cap data
     cache = MarketCapCache()
-    cache.clear_expired()  # Clean up old entries
+    cache.clear_expired()
     cache_stats = cache.get_stats()
     logger.info("cache.initialized", **cache_stats)
     
@@ -271,29 +274,26 @@ def run_market_scan(cfg: Config) -> None:
         buy_database_id=cfg.notion.buy_database_id
     )
     
-    # Get current watchlist (for duplicate checking)
-    existing_symbols, symbol_to_page = notion.get_watchlist()
-    existing_set = set(existing_symbols)
+    # Get symbols already in signals or buy databases (to avoid duplicates)
+    existing_symbols = notion.get_all_symbols()
+    existing_set = set(existing_symbols) if existing_symbols else set()
     
     # Get S&P 500 symbols
     sp500_symbols = get_sp500_symbols()
     logger.info("market_scan_symbols_loaded", count=len(sp500_symbols))
     
     # Track results
-    found_count = 0
-    updated_count = 0
+    filter_passed_count = 0
+    signal_found_count = 0
     added_count = 0
-    
-    # Get Alpha Vantage key (if configured)
-    alpha_vantage_key = cfg.api.alpha_vantage_key if hasattr(cfg.api, 'alpha_vantage_key') and cfg.api.alpha_vantage_key else None
-    data_source = "Alpha Vantage" if alpha_vantage_key else "yfinance"
+    skipped_count = 0
     
     print(f"\n🔍 Market Scanner: Analyzing {len(sp500_symbols)} S&P 500 stocks...")
-    print(f"📊 Filters: Market Cap ≥50B, Stoch RSI D<20, Price<BB Lower, MFI≤40")
-    print(f"💾 Cache: {cache_stats['valid_entries']} valid entries, {cache_stats['expired_entries']} expired")
-    print(f"📡 Data Source: {data_source} (market cap: yfinance)")
-    if alpha_vantage_key:
-        print(f"   ⚡ Using Alpha Vantage for precise technical indicators")
+    print(f"📊 Stage 0 Filters: Market Cap ≥50B, Stoch RSI D<20, Price<BB Lower, MFI≤40")
+    print(f"� Stage 1 Signal: Stoch RSI bullish cross + MFI 3-day uptrend")
+    print(f"� Cache: {cache_stats['valid_entries']} valid entries")
+    if existing_set:
+        print(f"⏭️  Skipping: {len(existing_set)} symbols already in signals/buy")
     print()
     
     # Scan each symbol
@@ -302,31 +302,57 @@ def run_market_scan(cfg: Config) -> None:
         if i % 50 == 0:
             print(f"   Progress: {i}/{len(sp500_symbols)} symbols scanned...")
         
-        # Check market filters (with cache and optional Alpha Vantage)
-        result = check_market_filter(symbol, cache=cache, alpha_vantage_key=alpha_vantage_key)
+        # Skip if already in signals or buy database
+        if symbol in existing_set:
+            skipped_count += 1
+            continue
         
-        if result and result.get('passed'):
-            found_count += 1
+        # === STAGE 0: Market Filter ===
+        result = check_market_filter(symbol, cache=cache)
+        
+        if not result or not result.get('passed'):
+            continue
+        
+        filter_passed_count += 1
+        
+        # === STAGE 1: Signal Check (Stoch RSI cross + MFI uptrend) ===
+        # We already have Stoch RSI from filter, check for bullish cross
+        try:
+            df = daily_ohlc(symbol)
+            if df is None or len(df) < 30:
+                continue
             
-            # Check if already in watchlist
-            if symbol in existing_set:
-                # Update date instead of adding duplicate
-                success = notion.update_watchlist_date(symbol, page_id=symbol_to_page.get(symbol))
-                if success:
-                    updated_count += 1
-                    print(f"   ✅ {symbol}: Already in watchlist, date updated")
-            else:
-                # Add to watchlist
-                success = notion.add_to_watchlist(symbol)
-                if success:
-                    added_count += 1
-                    print(f"   🆕 {symbol}: Added to watchlist")
-                    print(f"      Market Cap: ${result['market_cap']/1e9:.1f}B")
-                    print(f"      Stoch RSI D: {result['stoch_d']:.1f}, K: {result['stoch_k']:.1f}")
-                    print(f"      Price: ${result['price']:.2f} < BB Lower: ${result['bb_lower']:.2f}")
-                    print(f"      MFI: {result['mfi']:.1f}")
+            # Calculate indicators
+            stoch_ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
+            mfi_values = mfi(df, period=14)
+            
+            # Check Stochastic RSI bullish cross
+            has_stoch_signal = stoch_rsi_buy(stoch_ind)
+            
+            # Check MFI 3-day uptrend
+            mfi_trending_up = mfi_uptrend(mfi_values, days=3)
+            
+            if has_stoch_signal and mfi_trending_up:
+                signal_found_count += 1
+                
+                # Add directly to Signals database
+                if notion.symbol_exists_in_signals(symbol):
+                    print(f"   ℹ️  {symbol}: Already in signals (skipped)")
+                else:
+                    success = notion.add_to_signals(symbol, date.today().isoformat())
+                    if success:
+                        added_count += 1
+                        print(f"   🆕 {symbol}: Added to Signals DB")
+                        print(f"      Market Cap: ${result['market_cap']/1e9:.1f}B")
+                        print(f"      Stoch RSI D: {result['stoch_d']:.1f}, K: {result['stoch_k']:.1f}")
+                        print(f"      Price: ${result['price']:.2f} < BB Lower: ${result['bb_lower']:.2f}")
+                        print(f"      MFI: {result['mfi']:.1f} (3-day uptrend ✓)")
+                        
+        except Exception as e:
+            logger.warning("signal_check_failed", symbol=symbol, error=str(e))
+            continue
         
-        # Rate limiting: 0.5 second per request (max 2000 req/hour with yfinance)
+        # Rate limiting
         time.sleep(0.5)
     
     # Update signal performance (evaluate signals from 7+ days ago)
@@ -339,19 +365,17 @@ def run_market_scan(cfg: Config) -> None:
     
     # Record analytics
     analytics = Analytics()
-    analytics.record_market_scan(found_count, added_count, updated_count)
+    analytics.record_market_scan(filter_passed_count, added_count, 0)  # No updates, direct add
     
-    # Backup Notion databases (weekly)
+    # Backup Notion databases
     print("\n💾 Backing up Notion databases...")
     backup = NotionBackup()
     databases = {
-        "watchlist": cfg.notion.database_id,
         "signals": cfg.notion.signals_database_id,
         "buy": cfg.notion.buy_database_id
     }
     backup_files = backup.backup_all(notion, databases)
     
-    # Cleanup old backups (keep 30 days)
     deleted = backup.cleanup_old_backups(days=30)
     if deleted > 0:
         print(f"   🗑️  Cleaned up {deleted} old backups (>30 days)")
@@ -359,13 +383,12 @@ def run_market_scan(cfg: Config) -> None:
     backup_stats = backup.get_backup_stats()
     print(f"   📦 Total backups: {backup_stats['total_backups']} ({backup_stats['total_size_mb']:.1f} MB)")
     
-    # Check if weekly report should be sent
+    # Check weekly report
     if analytics.should_send_weekly_report():
         print("\n📧 Generating weekly report...")
         report = analytics.generate_weekly_report(signal_tracker)
         print(report)
         
-        # Send report via Telegram
         try:
             telegram = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
             telegram.send(f"```\n{report}\n```")
@@ -379,13 +402,16 @@ def run_market_scan(cfg: Config) -> None:
     print(f"\n" + "=" * 60)
     print(f"📈 Market Scan Complete!")
     print(f"=" * 60)
-    print(f"   Stocks matching filters: {found_count}")
-    print(f"   New additions to watchlist: {added_count}")
-    print(f"   Existing entries updated: {updated_count}")
+    print(f"   Scanned: {len(sp500_symbols)} S&P 500 stocks")
+    print(f"   Skipped: {skipped_count} (already in signals/buy)")
+    print(f"   Passed filters: {filter_passed_count}")
+    print(f"   Signals found: {signal_found_count}")
+    print(f"   Added to Signals DB: {added_count}")
     print(f"=" * 60 + "\n")
     
     logger.info("market_scan_completed", 
-                found=found_count, added=added_count, updated=updated_count,
+                scanned=len(sp500_symbols), skipped=skipped_count,
+                filter_passed=filter_passed_count, signals=signal_found_count, added=added_count,
                 performance_updated=perf_update['updated'])
 
 
@@ -448,141 +474,6 @@ def check_symbol(symbol: str) -> dict | None:
     except Exception as e:
         logger.error("check_failed", symbol=symbol, error=str(e))
         return None
-
-
-def run_scan(cfg: Config):
-    """Main scan loop - fetch from Notion, check signals, send to Telegram"""
-    
-    # Initialize clients
-    notion = NotionClient(
-        cfg.notion.api_token, 
-        cfg.notion.database_id,
-        cfg.notion.signals_database_id,
-        cfg.notion.buy_database_id
-    )
-    telegram = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
-    
-    logger.info("scan_started")
-    
-    # Fetch watchlist from Notion
-    logger.info("fetching_watchlist_from_notion")
-    symbols, symbol_to_page = notion.get_watchlist()
-    
-    # Remove duplicates from watchlist
-    unique_symbols = list(dict.fromkeys(symbols))  # Preserves order
-    if len(unique_symbols) < len(symbols):
-        logger.info("duplicates_removed", original=len(symbols), unique=len(unique_symbols))
-    symbols = unique_symbols
-    
-    if not symbols:
-        logger.warning("empty_watchlist")
-        print("⚠️  Watchlist is empty in Notion")
-        return
-    
-    # Get symbols already in signals or buy databases (to avoid duplicates)
-    existing_symbols = notion.get_all_symbols()
-    if existing_symbols:
-        logger.info("existing_signals_found", count=len(existing_symbols), symbols=list(existing_symbols))
-        print(f"ℹ️  Skipping {len(existing_symbols)} symbols already in signals/buy: {', '.join(sorted(existing_symbols))}\n")
-    
-    print(f"📋 Watchlist: {len(symbols)} symbols")
-    print(f"   {', '.join(symbols)}\n")
-    
-    # Check each symbol
-    signals_found = []
-    skipped_symbols = []
-    
-    for i, symbol in enumerate(symbols, 1):
-        print(f"🔍 [{i}/{len(symbols)}] Checking {symbol}...", end=" ")
-        
-        # Skip if already in signals or buy database
-        if symbol in existing_symbols:
-            print("⏭️  (already in signals/buy)")
-            skipped_symbols.append(symbol)
-            continue
-        
-        signal_data = check_symbol(symbol)
-        
-        if signal_data:
-            print("✅ SIGNAL!")
-            signals_found.append(symbol)
-            
-            # Use indicator values from check_symbol (no duplicate API call)
-            stoch_ind = signal_data['stoch_ind']
-            mfi_values = signal_data['mfi_values']
-            
-            # Send Telegram notification
-            today_str = date.today().strftime('%Y-%m-%d')
-            
-            message_lines = [
-                "**Yeni Sinyal Tespit Edildi!** 🚀",
-                "",
-                f"**Sembol:** `{symbol}`",
-                f"**Sinyal:** Stokastik RSI + MFI (AL)",
-                f"**Tarih:** {today_str}",
-                "",
-                "**Göstergeler:**",
-                f"• Stoch RSI K: {stoch_ind['k'].iloc[-1]:.1%}",
-                f"• Stoch RSI D: {stoch_ind['d'].iloc[-1]:.1%}",
-                f"• MFI: {mfi_values.iloc[-1]:.1f} (3-gün yükselişte)",
-            ]
-            message = "\n".join(message_lines)
-            try:
-                telegram.send(message)
-                logger.info("telegram_sent", symbol=symbol)
-                
-                # Remove from watchlist and add to signals database
-                page_id = symbol_to_page.get(symbol)
-                if page_id:
-                    notion.delete_page(page_id)
-                    print(f"   🗑️  Removed {symbol} from watchlist")
-                
-                # Add to signals database (if configured and not already exists)
-                if cfg.notion.signals_database_id:
-                    if notion.symbol_exists_in_signals(symbol):
-                        print(f"   ℹ️  {symbol} already in signals database (skipped)")
-                    else:
-                        notion.add_to_signals(symbol, date.today().isoformat())
-                        print(f"   ➕ Added {symbol} to signals database")
-            except Exception as e:
-                logger.error("telegram_failed", symbol=symbol, error=str(e))
-                print(f"   ⚠️  Failed to send Telegram: {e}")
-        else:
-            print("—")
-        
-        # Small delay to avoid rate limits
-        if i < len(symbols):
-            time.sleep(2)
-    
-    # Summary
-    print(f"\n✅ Scan complete!")
-    print(f"   Checked: {len(symbols)} symbols")
-    print(f"   Skipped: {len(skipped_symbols)} (already in signals/buy)")
-    print(f"   Signals: {len(signals_found)}")
-    
-    if signals_found:
-        print(f"\n🎯 New signals found:")
-        for s in signals_found:
-            print(f"   • {s}")
-    
-    # Record analytics
-    analytics = Analytics()
-    analytics.record_stage1_scan(
-        checked=len(symbols) - len(skipped_symbols),
-        passed=len(signals_found)
-    )
-    
-    # Record each alert
-    for symbol in signals_found:
-        try:
-            df = daily_ohlc(symbol)
-            if df is not None:
-                price = float(df['Close'].iloc[-1])
-                analytics.record_alert_sent(symbol, price)
-        except:
-            pass
-    
-    logger.info("scan_complete", total=len(symbols), skipped=len(skipped_symbols), signals=len(signals_found))
 
 
 def run_wavetrend_scan(cfg: Config):
@@ -802,11 +693,18 @@ def run_wavetrend_scan(cfg: Config):
 
 
 def run_continuous(cfg: Config, interval: int = 3600):
-    """Run scanner continuously at specified interval"""
+    """
+    Run scanner continuously at specified interval.
+    
+    New simplified 2-stage architecture:
+    - Stage 1: Market scan (S&P 500 → filter + signal → Signals DB) - once per day
+    - Stage 2: WaveTrend confirmation (Signals DB → Buy DB) - every cycle
+    """
     
     print(f"🔄 Continuous mode started")
     print(f"   Interval: {interval}s ({interval // 60} minutes)")
-    print(f"   Market scan: Daily (first cycle of each day)")
+    print(f"   Stage 1 (Market Scan): Daily (first cycle of each day)")
+    print(f"   Stage 2 (WaveTrend): Every cycle")
     print(f"   Press Ctrl+C to stop\n")
     
     cycle = 1
@@ -818,31 +716,24 @@ def run_continuous(cfg: Config, interval: int = 3600):
             print(f"📊 Scan Cycle {cycle}")
             print(f"{'='*60}\n")
             
-            # Stage 0: Market Scanner (once per day)
+            # Stage 1: Market Scanner (once per day)
+            # S&P 500 → filter + signal check → Signals DB
             today = date.today()
             if last_market_scan_date != today:
                 try:
-                    print("🔍 Stage 0: Daily Market Scanner (S&P 500)...\n")
+                    print("🔍 Stage 1: Daily Market Scanner (S&P 500 → Signals DB)...\n")
                     run_market_scan(cfg)
                     last_market_scan_date = today
                     print()
                 except Exception as e:
-                    logger.error("stage0_market_scan_error", cycle=cycle, error=str(e))
+                    logger.error("stage1_market_scan_error", cycle=cycle, error=str(e))
                     print(f"❌ Error in market scan: {e}\n")
-            
-            # Stage 1: Watchlist → Stoch RSI + MFI → Signals
-            try:
-                print("🔍 Stage 1: Checking watchlist (Stoch RSI + MFI)...\n")
-                run_scan(cfg)
-            except Exception as e:
-                logger.error("stage1_scan_error", cycle=cycle, error=str(e))
-                print(f"❌ Error in stage 1: {e}")
-            
-            print()  # Blank line between stages
+            else:
+                print("ℹ️  Stage 1: Market scan already done today, skipping...\n")
             
             # Stage 2: Signals → WaveTrend → Buy
             try:
-                print("🌊 Stage 2: Checking signals (WaveTrend)...\n")
+                print("🌊 Stage 2: Checking signals (WaveTrend → Buy DB)...\n")
                 run_wavetrend_scan(cfg)
             except Exception as e:
                 logger.error("stage2_scan_error", cycle=cycle, error=str(e))
@@ -862,7 +753,7 @@ def main(argv: list[str] | None = None):
     """CLI entry point"""
     
     parser = argparse.ArgumentParser(
-        description="Simple Telegram Screener: Notion → Stoch RSI → Telegram"
+        description="Telegram Stock Screener: S&P 500 → Signals → Buy (2-stage)"
     )
     
     parser.add_argument("--config", default="config.yaml",
@@ -875,7 +766,10 @@ def main(argv: list[str] | None = None):
                        help="Run once and exit (default: continuous)")
     
     parser.add_argument("--market-scan", action="store_true",
-                       help="Run market scanner (Stage 0) to populate watchlist from S&P 500")
+                       help="Run market scanner (Stage 1) - S&P 500 → Signals DB")
+    
+    parser.add_argument("--wavetrend", action="store_true",
+                       help="Run WaveTrend scan only (Stage 2) - Signals DB → Buy DB")
     
     args = parser.parse_args(argv)
     
@@ -883,26 +777,37 @@ def main(argv: list[str] | None = None):
         # Load config
         cfg = Config.load(args.config)
         
-        # Run market scanner (Stage 0)
+        # Run market scanner only (Stage 1)
         if args.market_scan:
-            print("🔍 Running Market Scanner (Stage 0)...\n")
+            print("🔍 Running Market Scanner (Stage 1)...\n")
             print("=" * 60)
-            print("📊 Analyzing S&P 500 for Watchlist Population")
+            print("📊 S&P 500 → Filter + Signal → Signals DB")
             print("=" * 60 + "\n")
             run_market_scan(cfg)
             print("\n✅ Market scan complete!")
             return 0
         
-        # Run Stage 1 + Stage 2
+        # Run WaveTrend scan only (Stage 2)
+        if args.wavetrend:
+            print("🌊 Running WaveTrend Scan (Stage 2)...\n")
+            print("=" * 60)
+            print("📈 Signals DB → WaveTrend Confirm → Buy DB")
+            print("=" * 60 + "\n")
+            run_wavetrend_scan(cfg)
+            print("\n✅ WaveTrend scan complete!")
+            return 0
+        
+        # Run both stages once
         if args.once:
             print("🔍 Running two-stage scan once...\n")
+            
             print("=" * 60)
-            print("📊 Stage 1: Watchlist (Stoch RSI + MFI)")
+            print("📊 Stage 1: Market Scanner (S&P 500 → Signals DB)")
             print("=" * 60 + "\n")
-            run_scan(cfg)
+            run_market_scan(cfg)
             
             print("\n" + "=" * 60)
-            print("🌊 Stage 2: Signals (WaveTrend)")
+            print("🌊 Stage 2: WaveTrend (Signals DB → Buy DB)")
             print("=" * 60 + "\n")
             run_wavetrend_scan(cfg)
             
