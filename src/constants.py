@@ -4,6 +4,28 @@ All magic numbers and configurable thresholds are defined here.
 """
 
 # =============================================================================
+# HTTP & NETWORKING
+# =============================================================================
+NOTION_TIMEOUT = 30             # Notion API timeout (seconds)
+TELEGRAM_TIMEOUT = 10           # Telegram API timeout (seconds)
+DEFAULT_RETRY_DELAY = 1.0       # Base delay for retries (seconds)
+MAX_RETRY_DELAY = 30.0          # Maximum retry delay (seconds)
+MAX_RETRY_ATTEMPTS = 3          # Maximum retry attempts
+CONNECTION_POOL_SIZE = 10       # HTTP connection pool size
+YFINANCE_BATCH_SIZE = 50        # Symbols per batch for yfinance
+BATCH_SLEEP_SECONDS = 1.0       # Sleep between batches (seconds)
+
+
+# =============================================================================
+# RATE LIMITING
+# =============================================================================
+YFINANCE_RATE_LIMIT = 60        # Requests per minute
+NOTION_RATE_LIMIT = 30          # Requests per minute
+TELEGRAM_RATE_LIMIT = 20        # Requests per minute
+ALPHA_VANTAGE_RATE_LIMIT = 5    # Requests per minute (free tier)
+
+
+# =============================================================================
 # MARKET CAP FILTER
 # =============================================================================
 MARKET_CAP_THRESHOLD = 50_000_000_000  # 50B USD minimum market cap

@@ -5,13 +5,29 @@ import requests
 from .logger import logger
 from .exceptions import ConfigError
 from .rate_limiter import rate_limit
-
-# Default timeout for all Notion API requests (seconds)
-NOTION_TIMEOUT = 30
+from .constants import NOTION_TIMEOUT
 
 
 class NotionClient:
     """Client for interacting with Notion API - Signals and Buy databases"""
+    
+    # Shared session for connection pooling (TCP reuse)
+    _session: Optional[requests.Session] = None
+    
+    @classmethod
+    def _get_session(cls) -> requests.Session:
+        """Get or create shared requests session for connection pooling."""
+        if cls._session is None:
+            cls._session = requests.Session()
+            # Connection pool settings
+            adapter = requests.adapters.HTTPAdapter(
+                pool_connections=5,  # Number of connection pools
+                pool_maxsize=10,     # Max connections per pool
+                max_retries=0        # We handle retries ourselves
+            )
+            cls._session.mount('https://', adapter)
+            logger.debug("notion.session_created")
+        return cls._session
     
     def __init__(self, api_token: str, database_id: str = None, signals_database_id: str = None, buy_database_id: str = None):
         """
@@ -43,10 +59,15 @@ class NotionClient:
         
         # Schema cache to avoid repeated API calls
         self._schema_cache: Dict[str, dict] = {}
+        
+        # Initialize session with headers
+        session = self._get_session()
+        session.headers.update(self.headers)
     
     def _request(self, method: str, url: str, **kwargs) -> requests.Response:
         """
         Make HTTP request with timeout, rate limiting, and retry.
+        Uses connection pooling via shared Session.
         
         Args:
             method: HTTP method (get, post, patch, delete)
@@ -60,25 +81,24 @@ class NotionClient:
             requests.RequestException: After all retries exhausted
         """
         from .retry import is_retryable_http_status
+        from .constants import MAX_RETRY_ATTEMPTS, RETRY_BASE_DELAY
         
         # Rate limit Notion API calls
         rate_limit("notion")
         
         kwargs.setdefault('timeout', NOTION_TIMEOUT)
-        kwargs.setdefault('headers', self.headers)
         
-        max_attempts = 3
-        base_delay = 1.0
-        
+        session = self._get_session()
         last_exception = None
-        for attempt in range(1, max_attempts + 1):
+        
+        for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
             try:
-                response = getattr(requests, method)(url, **kwargs)
+                response = getattr(session, method)(url, **kwargs)
                 
                 # Check if retryable error
                 if is_retryable_http_status(response.status_code):
-                    if attempt < max_attempts:
-                        delay = base_delay * (2 ** (attempt - 1))
+                    if attempt < MAX_RETRY_ATTEMPTS:
+                        delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
                         logger.warning(
                             "notion.retry",
                             status=response.status_code,
@@ -93,8 +113,8 @@ class NotionClient:
                 
             except requests.RequestException as e:
                 last_exception = e
-                if attempt < max_attempts:
-                    delay = base_delay * (2 ** (attempt - 1))
+                if attempt < MAX_RETRY_ATTEMPTS:
+                    delay = RETRY_BASE_DELAY * (2 ** (attempt - 1))
                     logger.warning(
                         "notion.retry_network",
                         attempt=attempt,
@@ -104,7 +124,7 @@ class NotionClient:
                     import time
                     time.sleep(delay)
                 else:
-                    logger.error("notion.request_failed", attempts=max_attempts, error=str(e))
+                    logger.error("notion.request_failed", attempts=MAX_RETRY_ATTEMPTS, error=str(e))
                     raise
         
         # Return last response or raise last exception
@@ -115,6 +135,7 @@ class NotionClient:
     def _get_database_schema(self, database_id: str) -> Optional[dict]:
         """
         Get database schema with caching.
+        Uses connection pooling via shared Session.
         
         Args:
             database_id: The Notion database ID
@@ -127,7 +148,8 @@ class NotionClient:
         
         try:
             schema_url = f"{self.base_url}/databases/{database_id}"
-            schema_response = requests.get(schema_url, headers=self.headers, timeout=NOTION_TIMEOUT)
+            session = self._get_session()
+            schema_response = session.get(schema_url, timeout=NOTION_TIMEOUT)
             schema_response.raise_for_status()
             schema_data = schema_response.json()
             

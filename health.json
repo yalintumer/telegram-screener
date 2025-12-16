@@ -1,0 +1,9 @@
+{
+  "status": "starting",
+  "started_at": "2025-12-16T18:48:01.722101",
+  "last_heartbeat": null,
+  "last_scan": null,
+  "scan_count": 0,
+  "error_count": 0,
+  "version": "1.0.0"
+}

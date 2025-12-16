@@ -7,6 +7,12 @@ import threading
 from collections import defaultdict
 from typing import Optional
 from .logger import logger
+from .constants import (
+    YFINANCE_RATE_LIMIT,
+    NOTION_RATE_LIMIT,
+    TELEGRAM_RATE_LIMIT,
+    ALPHA_VANTAGE_RATE_LIMIT,
+)
 
 
 class RateLimiter:
@@ -21,10 +27,10 @@ class RateLimiter:
     
     # Default limits per service (requests per minute)
     DEFAULT_LIMITS = {
-        "yfinance": 60,      # yfinance is generous, but let's be safe
-        "notion": 30,        # Notion API limit
-        "telegram": 20,      # Telegram rate limits
-        "alpha_vantage": 5,  # Free tier: 5/min
+        "yfinance": YFINANCE_RATE_LIMIT,
+        "notion": NOTION_RATE_LIMIT,
+        "telegram": TELEGRAM_RATE_LIMIT,
+        "alpha_vantage": ALPHA_VANTAGE_RATE_LIMIT,
     }
     
     def __init__(self, custom_limits: Optional[dict] = None):

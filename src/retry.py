@@ -7,6 +7,7 @@ import random
 from functools import wraps
 from typing import Callable, Tuple, Type, Optional
 from .logger import logger
+from .constants import MAX_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, MAX_RETRY_DELAY
 
 
 class RetryError(Exception):
@@ -17,9 +18,9 @@ class RetryError(Exception):
 
 
 def retry_with_backoff(
-    max_attempts: int = 3,
-    base_delay: float = 1.0,
-    max_delay: float = 30.0,
+    max_attempts: int = MAX_RETRY_ATTEMPTS,
+    base_delay: float = DEFAULT_RETRY_DELAY,
+    max_delay: float = MAX_RETRY_DELAY,
     exponential_base: float = 2.0,
     jitter: bool = True,
     retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,),

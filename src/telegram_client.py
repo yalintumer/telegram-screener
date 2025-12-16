@@ -1,17 +1,37 @@
 import time
+from typing import Optional
 import requests
 from .logger import logger
 from .exceptions import TelegramError
 from .rate_limiter import rate_limit
+from .constants import TELEGRAM_TIMEOUT, MAX_RETRY_ATTEMPTS
 
 
 class TelegramClient:
     """
-    Telegram client with retry and proper error handling.
+    Telegram client with retry, connection pooling, and proper error handling.
     
+    Uses requests.Session for TCP connection reuse.
     Critical errors are NOT swallowed - they propagate up.
     Transient errors are retried with exponential backoff.
     """
+    
+    # Shared session for connection pooling
+    _session: Optional[requests.Session] = None
+    
+    @classmethod
+    def _get_session(cls) -> requests.Session:
+        """Get or create shared requests session for connection pooling."""
+        if cls._session is None:
+            cls._session = requests.Session()
+            adapter = requests.adapters.HTTPAdapter(
+                pool_connections=2,
+                pool_maxsize=5,
+                max_retries=0
+            )
+            cls._session.mount('https://', adapter)
+            logger.debug("telegram.session_created")
+        return cls._session
     
     def __init__(self, token: str, chat_id: str):
         self.base = f"https://api.telegram.org/bot{token}"
@@ -39,24 +59,24 @@ class TelegramClient:
         rate_limit("telegram")
         
         url = f"{self.base}/sendMessage"
-        max_attempts = 3
+        session = self._get_session()
         last_error = None
         
-        for attempt in range(1, max_attempts + 1):
+        for attempt in range(1, MAX_RETRY_ATTEMPTS + 1):
             try:
                 logger.debug("telegram.sending", preview=text[:50], attempt=attempt)
                 
-                r = requests.post(
+                r = session.post(
                     url,
                     json={"chat_id": self.chat_id, "text": text, "parse_mode": parse_mode},
-                    timeout=10
+                    timeout=TELEGRAM_TIMEOUT
                 )
                 
                 # Handle rate limiting (429)
                 if r.status_code == 429:
                     retry_after = int(r.headers.get('Retry-After', 5))
                     logger.warning("telegram.rate_limited", retry_after=retry_after)
-                    if attempt < max_attempts:
+                    if attempt < MAX_RETRY_ATTEMPTS:
                         time.sleep(retry_after)
                         continue
                 
@@ -74,14 +94,14 @@ class TelegramClient:
             except requests.Timeout as e:
                 last_error = e
                 logger.warning("telegram.timeout", attempt=attempt)
-                if attempt < max_attempts:
+                if attempt < MAX_RETRY_ATTEMPTS:
                     time.sleep(2 ** attempt)  # Exponential backoff
                     continue
                     
             except requests.RequestException as e:
                 last_error = e
                 logger.error("telegram.network_error", attempt=attempt, error=str(e)[:50])
-                if attempt < max_attempts:
+                if attempt < MAX_RETRY_ATTEMPTS:
                     time.sleep(2 ** attempt)
                     continue
                     
