@@ -3,7 +3,7 @@
 import os
 import time
 import argparse
-from datetime import date
+from datetime import date, datetime
 from .config import Config
 from .notion_client import NotionClient
 from .telegram_client import TelegramClient
@@ -43,23 +43,38 @@ def update_signal_performance(signal_tracker: SignalTracker, lookback_days: int 
     updated = 0
     failed = 0
     
-    for symbol, alerts in signal_tracker.alerts.items():
-        for alert_data in alerts:
-            # Skip if already evaluated or too recent
-            if alert_data.get('evaluated') or (time.time() - alert_data['timestamp']) < lookback_days * 86400:
+    # Iterate over signal_history (list of signal dicts)
+    for signal in signal_tracker.data.get("signal_history", []):
+        symbol = signal.get("symbol")
+        if not symbol:
+            continue
+        
+        # Skip if already evaluated
+        if signal.get("performance"):
+            continue
+        
+        # Check if enough time has passed
+        try:
+            signal_date = signal.get("date") or signal.get("tracking_start")
+            if not signal_date:
                 continue
             
-            try:
-                # Get current price
-                ticker = yf.Ticker(symbol)
-                current_price = ticker.info.get('currentPrice') or ticker.info.get('regularMarketPrice')
-                
-                if current_price:
-                    signal_tracker.update_signal_performance(symbol, alert_data['timestamp'], current_price)
-                    updated += 1
-            except Exception as e:
-                logger.warning("performance_update_failed", symbol=symbol, error=str(e))
-                failed += 1
+            signal_datetime = datetime.fromisoformat(signal_date)
+            days_since = (datetime.now() - signal_datetime).days
+            
+            if days_since < lookback_days:
+                continue
+            
+            # Get current price and update performance
+            ticker = yf.Ticker(symbol)
+            current_price = ticker.info.get('currentPrice') or ticker.info.get('regularMarketPrice')
+            
+            if current_price:
+                signal_tracker.update_signal_performance(symbol, lookback_days)
+                updated += 1
+        except Exception as e:
+            logger.warning("performance_update_failed", symbol=symbol, error=str(e))
+            failed += 1
     
     return {"updated": updated, "failed": failed}
 
