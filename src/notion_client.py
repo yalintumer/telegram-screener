@@ -1,6 +1,6 @@
 """Notion API client for fetching watchlist from database"""
 
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional
 import requests
 from .logger import logger
 from .exceptions import ConfigError
@@ -35,6 +35,44 @@ class NotionClient:
             "Notion-Version": "2022-06-28",
             "Content-Type": "application/json"
         }
+        
+        # Schema cache to avoid repeated API calls
+        self._schema_cache: Dict[str, dict] = {}
+    
+    def _get_database_schema(self, database_id: str) -> Optional[dict]:
+        """
+        Get database schema with caching.
+        
+        Args:
+            database_id: The Notion database ID
+            
+        Returns:
+            Database schema properties dict or None if failed
+        """
+        if database_id in self._schema_cache:
+            return self._schema_cache[database_id]
+        
+        try:
+            schema_url = f"{self.base_url}/databases/{database_id}"
+            schema_response = requests.get(schema_url, headers=self.headers)
+            schema_response.raise_for_status()
+            schema_data = schema_response.json()
+            
+            properties = schema_data.get("properties", {})
+            self._schema_cache[database_id] = properties
+            logger.info("schema_cached", database_id=database_id[:8])
+            return properties
+            
+        except Exception as e:
+            logger.error("schema_fetch_failed", database_id=database_id[:8], error=str(e))
+            return None
+    
+    def _find_title_property(self, properties: dict) -> Optional[str]:
+        """Find the title property name from schema properties."""
+        for prop_name, prop_info in properties.items():
+            if prop_info.get("type") == "title":
+                return prop_name
+        return None
     
     def get_watchlist(self) -> Tuple[List[str], Dict[str, str]]:
         """
@@ -111,33 +149,6 @@ class NotionClient:
             logger.error("notion.parse_failed", error=str(e))
             raise Exception(f"Failed to parse Notion response: {e}")
     
-    def delete_page(self, page_id: str) -> bool:
-        """
-        Delete (archive) a page from Notion database
-        
-        Args:
-            page_id: ID of the page to delete
-            
-        Returns:
-            True if successful, False otherwise
-        """
-        url = f"{self.base_url}/pages/{page_id}"
-        
-        try:
-            # Archive the page (soft delete)
-            response = requests.patch(
-                url, 
-                headers=self.headers, 
-                json={"archived": True}
-            )
-            response.raise_for_status()
-            logger.info("notion.page_deleted", page_id=page_id)
-            return True
-            
-        except Exception as e:
-            logger.error("notion.delete_failed", page_id=page_id, error=str(e))
-            return False
-    
     def add_to_signals(self, symbol: str, date_str: str = None) -> bool:
         """
         Add a symbol to the signals database
@@ -157,22 +168,20 @@ class NotionClient:
             from datetime import date as dt
             signal_date = date_str or dt.today().isoformat()
             
-            # First, get the database schema to find the title property name
-            schema_url = f"{self.base_url}/databases/{self.signals_database_id}"
-            schema_response = requests.get(schema_url, headers=self.headers)
-            schema_response.raise_for_status()
-            schema_data = schema_response.json()
+            # Get cached schema
+            properties = self._get_database_schema(self.signals_database_id)
+            if not properties:
+                logger.error("notion.schema_fetch_failed", database_id=self.signals_database_id)
+                return False
             
-            # Find the title property (first property is usually title)
-            properties = schema_data.get("properties", {})
-            title_property = None
+            # Find the title and date properties
+            title_property = self._find_title_property(properties)
             date_property = None
             
             for prop_name, prop_data in properties.items():
-                if prop_data.get("type") == "title":
-                    title_property = prop_name
                 if prop_data.get("type") == "date":
                     date_property = prop_name
+                    break
             
             if not title_property:
                 logger.error("notion.no_title_property", database_id=self.signals_database_id)
@@ -375,6 +384,21 @@ class NotionClient:
             True if deletion successful, False otherwise
         """
         try:
+            # First check if page exists and is not already archived
+            get_url = f"https://api.notion.com/v1/pages/{page_id}"
+            check_response = requests.get(get_url, headers=self.headers)
+            
+            if check_response.status_code == 404:
+                logger.warning("notion.page_not_found", page_id=page_id)
+                return True  # Already deleted, consider success
+            
+            if check_response.status_code == 200:
+                page_data = check_response.json()
+                if page_data.get("archived", False):
+                    logger.info("notion.page_already_archived", page_id=page_id)
+                    return True  # Already archived, consider success
+            
+            # Archive the page
             delete_url = f"https://api.notion.com/v1/pages/{page_id}"
             payload = {"archived": True}
             
@@ -484,23 +508,21 @@ class NotionClient:
             from datetime import date as dt
             added_date = date_str or dt.today().isoformat()
             
-            # First, get the database schema to find the title property name
-            schema_url = f"{self.base_url}/databases/{self.database_id}"
-            schema_response = requests.get(schema_url, headers=self.headers)
-            schema_response.raise_for_status()
-            schema_data = schema_response.json()
+            # Get cached schema
+            properties = self._get_database_schema(self.database_id)
+            if not properties:
+                logger.error("notion.schema_fetch_failed", database_id=self.database_id)
+                return False
             
             # Find the title property and date property
-            properties = schema_data.get("properties", {})
-            title_property = None
+            title_property = self._find_title_property(properties)
             date_property = None
             
             for prop_name, prop_data in properties.items():
-                if prop_data.get("type") == "title":
-                    title_property = prop_name
                 # Look for "Added" date property
                 if prop_data.get("type") == "date" and "add" in prop_name.lower():
                     date_property = prop_name
+                    break
             
             if not title_property:
                 logger.error("notion.no_title_property", database_id=self.database_id)
@@ -592,5 +614,130 @@ class NotionClient:
             
         except requests.exceptions.RequestException as e:
             logger.error("notion.update_date_failed", symbol=symbol, error=str(e))
+            return False
+
+    def cleanup_old_signals(self, max_age_days: int = 7) -> int:
+        """
+        Remove old entries from signals database.
+        
+        Signals older than max_age_days will be archived (deleted).
+        This prevents stale signals from accumulating.
+        
+        Args:
+            max_age_days: Maximum age in days before signal is removed (default: 7)
+            
+        Returns:
+            int: Number of signals removed
+        """
+        from datetime import datetime, timedelta
+        
+        if not self.signals_database_id:
+            logger.warning("notion.cleanup_no_signals_db")
+            return 0
+        
+        try:
+            url = f"{self.base_url}/databases/{self.signals_database_id}/query"
+            response = requests.post(url, headers=self.headers, json={})
+            response.raise_for_status()
+            
+            data = response.json()
+            results = data.get("results", [])
+            
+            if not results:
+                return 0
+            
+            # Find date property name
+            first_page_props = results[0].get("properties", {})
+            date_property = None
+            for prop_name, prop_data in first_page_props.items():
+                if prop_data.get("type") == "date":
+                    date_property = prop_name
+                    break
+            
+            removed_count = 0
+            cutoff_date = datetime.now() - timedelta(days=max_age_days)
+            
+            for page in results:
+                page_id = page["id"]
+                props = page.get("properties", {})
+                
+                # Get signal date
+                signal_date = None
+                if date_property:
+                    date_data = props.get(date_property, {}).get("date")
+                    if date_data and date_data.get("start"):
+                        try:
+                            signal_date = datetime.fromisoformat(date_data["start"].replace("Z", "+00:00"))
+                            # Make naive for comparison
+                            if signal_date.tzinfo:
+                                signal_date = signal_date.replace(tzinfo=None)
+                        except:
+                            pass
+                
+                # If no date or date is old, remove it
+                should_remove = False
+                if signal_date is None:
+                    # No date = old/manual entry, remove it
+                    should_remove = True
+                elif signal_date < cutoff_date:
+                    should_remove = True
+                
+                if should_remove:
+                    if self.delete_page(page_id):
+                        removed_count += 1
+                        # Get symbol for logging
+                        for prop_name, prop_data in props.items():
+                            if prop_data.get("type") == "title":
+                                title_content = prop_data.get("title", [])
+                                if title_content:
+                                    symbol = title_content[0].get("text", {}).get("content", "unknown")
+                                    logger.info("notion.old_signal_removed", symbol=symbol, page_id=page_id)
+                                break
+            
+            logger.info("notion.signals_cleanup_complete", removed=removed_count)
+            return removed_count
+            
+        except Exception as e:
+            logger.error("notion.cleanup_failed", error=str(e))
+            return 0
+
+    def symbol_exists_in_signals(self, symbol: str) -> bool:
+        """
+        Check if a symbol already exists in signals database.
+        
+        Used to prevent duplicate entries (including manual ones).
+        
+        Args:
+            symbol: Stock ticker symbol to check
+            
+        Returns:
+            bool: True if symbol exists, False otherwise
+        """
+        if not self.signals_database_id:
+            return False
+        
+        try:
+            symbols, _ = self.get_signals()
+            return symbol.upper() in [s.upper() for s in symbols]
+        except:
+            return False
+
+    def symbol_exists_in_buy(self, symbol: str) -> bool:
+        """
+        Check if a symbol already exists in buy database.
+        
+        Args:
+            symbol: Stock ticker symbol to check
+            
+        Returns:
+            bool: True if symbol exists, False otherwise
+        """
+        if not self.buy_database_id:
+            return False
+        
+        try:
+            buy_symbols = self._get_symbols_from_database(self.buy_database_id)
+            return symbol.upper() in [s.upper() for s in buy_symbols]
+        except:
             return False
 

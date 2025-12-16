@@ -3,10 +3,16 @@ Alpha Vantage test - Hassas teknik indikatörler için
 """
 from alpha_vantage.timeseries import TimeSeries
 import pandas as pd
+import os
 
-API_KEY = 'XF05AMWFEEG431JW'
+API_KEY = os.getenv('ALPHA_VANTAGE_KEY', '')
 
 def test_alpha_vantage():
+    if not API_KEY:
+        print('❌ ALPHA_VANTAGE_KEY environment variable not set')
+        print('   Run: export ALPHA_VANTAGE_KEY=your_key_here')
+        return False
+        
     print('='*60)
     print('Alpha Vantage Test - MSFT')
     print('='*60)

@@ -1,7 +1,11 @@
 import pandas as pd
+from .constants import (
+    STOCH_RSI_PERIOD, STOCH_PERIOD, STOCH_K_SMOOTH, STOCH_D_SMOOTH, STOCH_OVERSOLD,
+    MFI_PERIOD, MFI_UPTREND_DAYS, SIGNAL_LOOKBACK_DAYS, WAVETREND_OVERSOLD
+)
 
 
-def rsi(series: pd.Series, period: int = 14) -> pd.Series:
+def rsi(series: pd.Series, period: int = STOCH_RSI_PERIOD) -> pd.Series:
     """
     Calculate RSI (Relative Strength Index)
     
@@ -18,7 +22,7 @@ def rsi(series: pd.Series, period: int = 14) -> pd.Series:
     return 100 - (100 / (1 + rs))
 
 
-def mfi(df: pd.DataFrame, period: int = 14) -> pd.Series:
+def mfi(df: pd.DataFrame, period: int = MFI_PERIOD) -> pd.Series:
     """
     Calculate MFI (Money Flow Index)
     
@@ -62,7 +66,7 @@ def mfi(df: pd.DataFrame, period: int = 14) -> pd.Series:
     return mfi
 
 
-def mfi_uptrend(mfi_series: pd.Series, days: int = 3) -> bool:
+def mfi_uptrend(mfi_series: pd.Series, days: int = MFI_UPTREND_DAYS) -> bool:
     """
     Check if MFI shows uptrend pattern
     
@@ -148,8 +152,8 @@ def wavetrend(df: pd.DataFrame, channel_length: int = 10, average_length: int = 
     return pd.DataFrame({"wt1": wt1, "wt2": wt2})
 
 
-def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = 5, 
-                  oversold_level: int = -53) -> bool:
+def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS, 
+                  oversold_level: int = WAVETREND_OVERSOLD) -> bool:
     """
     Detect WaveTrend buy signal (bullish cross in oversold zone)
     
@@ -197,7 +201,8 @@ def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = 5,
     return False
 
 
-def stochastic_rsi(close: pd.Series, rsi_period=14, stoch_period=14, k=3, d=3) -> pd.DataFrame:
+def stochastic_rsi(close: pd.Series, rsi_period=STOCH_RSI_PERIOD, stoch_period=STOCH_PERIOD, 
+                   k=STOCH_K_SMOOTH, d=STOCH_D_SMOOTH) -> pd.DataFrame:
     r = rsi(close, rsi_period)
     r_min = r.rolling(stoch_period).min()
     r_max = r.rolling(stoch_period).max()
@@ -208,7 +213,7 @@ def stochastic_rsi(close: pd.Series, rsi_period=14, stoch_period=14, k=3, d=3) -
     return pd.DataFrame({"rsi": r, "k": k_line, "d": d_line})
 
 
-def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 5) -> bool:
+def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS) -> bool:
     """
     Stochastic RSI buy signal detection.
     
@@ -248,8 +253,8 @@ def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 5) -> bool:
         cross_up = prev.k <= prev.d and curr.k > curr.d
         
         # Oversold: Either line is below 20 during the cross
-        oversold = (curr.k < 0.2 or curr.d < 0.2 or 
-                   prev.k < 0.2 or prev.d < 0.2)
+        oversold = (curr.k < STOCH_OVERSOLD or curr.d < STOCH_OVERSOLD or 
+                   prev.k < STOCH_OVERSOLD or prev.d < STOCH_OVERSOLD)
         
         # Valid signal requires: cross + oversold (simplified)
         valid_cross = cross_up and oversold

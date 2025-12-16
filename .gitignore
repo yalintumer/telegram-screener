@@ -34,6 +34,15 @@ watchlist.json
 signal_history.json
 stats.json
 
+# Test files with potential secrets
+test_alpha_vantage.py
+test_yfinance_quality.py
+test.json
+send_test_notification.py
+
+# Cache files
+market_cap_cache.json
+
 # Deprecated files
 deprecated/
 *.code-workspace

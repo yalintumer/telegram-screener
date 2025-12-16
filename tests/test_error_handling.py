@@ -160,9 +160,9 @@ class TestEndToEndErrorScenarios:
         
         mock_ohlc.return_value = None
         
-        # Should return False, not crash
+        # Should return None, not crash
         result = check_symbol("TEST")
-        assert result == False
+        assert result is None
     
     @patch('src.data_source_yfinance.daily_ohlc')
     def test_insufficient_data_handling(self, mock_ohlc):
@@ -181,7 +181,7 @@ class TestEndToEndErrorScenarios:
         })
         
         result = check_symbol("TEST")
-        assert result == False
+        assert result is None
 
 
 if __name__ == '__main__':

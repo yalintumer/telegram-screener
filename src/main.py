@@ -1,5 +1,6 @@
 """Simplified Telegram screener - Notion → Stoch RSI → Telegram"""
 
+import os
 import time
 import argparse
 from datetime import date
@@ -18,11 +19,14 @@ from .backup import NotionBackup
 import sentry_sdk
 import yfinance as yf
 
-sentry_sdk.init(
-    dsn="https://419f2c57fd95ab96c48f859f9b7ed347@o4510393252839424.ingest.de.sentry.io/4510393259196496",
-    traces_sample_rate=1.0,  # Capture 100% of transactions for performance monitoring
-    send_default_pii=True,   # Include user IP and request data
-)
+# Initialize Sentry for error tracking (DSN from environment)
+SENTRY_DSN = os.getenv('SENTRY_DSN', '')
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        traces_sample_rate=1.0,
+        send_default_pii=True,
+    )
 
 
 def update_signal_performance(signal_tracker: SignalTracker, lookback_days: int = 7) -> dict:
@@ -385,7 +389,7 @@ def run_market_scan(cfg: Config) -> None:
                 performance_updated=perf_update['updated'])
 
 
-def check_symbol(symbol: str) -> bool:
+def check_symbol(symbol: str) -> dict | None:
     """
     Check if symbol has Stochastic RSI + MFI buy signal
     
@@ -393,7 +397,9 @@ def check_symbol(symbol: str) -> bool:
     1. Stochastic RSI bullish cross in oversold zone
     2. MFI in uptrend for last 3 days (volume-weighted momentum)
     
-    Returns True if both conditions met
+    Returns:
+        dict with indicator data if signal found, None otherwise
+        Keys: 'stoch_ind', 'mfi_values', 'df'
     """
     try:
         logger.info("checking_symbol", symbol=symbol)
@@ -403,7 +409,7 @@ def check_symbol(symbol: str) -> bool:
         
         if df is None or len(df) < 30:
             logger.warning("insufficient_data", symbol=symbol)
-            return False
+            return None
         
         # Calculate Stochastic RSI
         stoch_ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
@@ -412,7 +418,7 @@ def check_symbol(symbol: str) -> bool:
         has_stoch_signal = stoch_rsi_buy(stoch_ind)
         
         if not has_stoch_signal:
-            return False
+            return None
         
         # Calculate MFI (Money Flow Index)
         mfi_values = mfi(df, period=14)
@@ -424,7 +430,12 @@ def check_symbol(symbol: str) -> bool:
             logger.info("signal_found", symbol=symbol, 
                        mfi_current=float(mfi_values.iloc[-1]),
                        stoch_k=float(stoch_ind['k'].iloc[-1]))
-            return True
+            # Return indicator data to avoid duplicate API calls
+            return {
+                'stoch_ind': stoch_ind,
+                'mfi_values': mfi_values,
+                'df': df
+            }
         
         # Log why signal was rejected
         if has_stoch_signal and not mfi_trending_up:
@@ -432,11 +443,11 @@ def check_symbol(symbol: str) -> bool:
                        reason="MFI not in 3-day uptrend",
                        mfi_current=float(mfi_values.iloc[-1]))
         
-        return False
+        return None
         
     except Exception as e:
         logger.error("check_failed", symbol=symbol, error=str(e))
-        return False
+        return None
 
 
 def run_scan(cfg: Config):
@@ -456,6 +467,12 @@ def run_scan(cfg: Config):
     # Fetch watchlist from Notion
     logger.info("fetching_watchlist_from_notion")
     symbols, symbol_to_page = notion.get_watchlist()
+    
+    # Remove duplicates from watchlist
+    unique_symbols = list(dict.fromkeys(symbols))  # Preserves order
+    if len(unique_symbols) < len(symbols):
+        logger.info("duplicates_removed", original=len(symbols), unique=len(unique_symbols))
+    symbols = unique_symbols
     
     if not symbols:
         logger.warning("empty_watchlist")
@@ -484,16 +501,15 @@ def run_scan(cfg: Config):
             skipped_symbols.append(symbol)
             continue
         
-        has_signal = check_symbol(symbol)
+        signal_data = check_symbol(symbol)
         
-        if has_signal:
+        if signal_data:
             print("✅ SIGNAL!")
             signals_found.append(symbol)
             
-            # Get indicator values for message
-            df = daily_ohlc(symbol)
-            mfi_values = mfi(df, period=14)
-            stoch_ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
+            # Use indicator values from check_symbol (no duplicate API call)
+            stoch_ind = signal_data['stoch_ind']
+            mfi_values = signal_data['mfi_values']
             
             # Send Telegram notification
             today_str = date.today().strftime('%Y-%m-%d')
@@ -521,11 +537,13 @@ def run_scan(cfg: Config):
                     notion.delete_page(page_id)
                     print(f"   🗑️  Removed {symbol} from watchlist")
                 
-                # Add to signals database (if configured)
+                # Add to signals database (if configured and not already exists)
                 if cfg.notion.signals_database_id:
-                    # use top-level `date` import (don't re-import inside function)
-                    notion.add_to_signals(symbol, date.today().isoformat())
-                    print(f"   ➕ Added {symbol} to signals database")
+                    if notion.symbol_exists_in_signals(symbol):
+                        print(f"   ℹ️  {symbol} already in signals database (skipped)")
+                    else:
+                        notion.add_to_signals(symbol, date.today().isoformat())
+                        print(f"   ➕ Added {symbol} to signals database")
             except Exception as e:
                 logger.error("telegram_failed", symbol=symbol, error=str(e))
                 print(f"   ⚠️  Failed to send Telegram: {e}")
@@ -590,6 +608,12 @@ def run_wavetrend_scan(cfg: Config):
     telegram = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
     signal_tracker = SignalTracker()
     
+    # Cleanup old signals (older than 7 days or without date)
+    print("🧹 Cleaning up old signals...")
+    removed_count = notion.cleanup_old_signals(max_age_days=7)
+    if removed_count > 0:
+        print(f"   Removed {removed_count} old/stale signals")
+    
     # Show daily stats
     daily_stats = signal_tracker.get_daily_stats()
     logger.info("signal_tracker.daily_stats", **daily_stats)
@@ -600,6 +624,12 @@ def run_wavetrend_scan(cfg: Config):
     # Fetch symbols from signals database
     logger.info("fetching_signals_from_notion")
     symbols, symbol_to_page = notion.get_signals()
+    
+    # Remove duplicates from signals list
+    unique_symbols = list(dict.fromkeys(symbols))  # Preserves order
+    if len(unique_symbols) < len(symbols):
+        logger.info("signal_duplicates_removed", original=len(symbols), unique=len(unique_symbols))
+    symbols = unique_symbols
     
     if not symbols:
         print("⚠️  Signals database is empty")
@@ -644,13 +674,17 @@ def run_wavetrend_scan(cfg: Config):
                 # Still move to buy database but don't send Telegram
                 confirmed_signals.append(symbol)
                 
-                # Add to buy database silently
+                # Remove from signals and add to buy database silently
                 if cfg.notion.buy_database_id:
                     page_id = symbol_to_page.get(symbol)
                     if page_id:
                         notion.delete_page(page_id)
-                    notion.add_to_buy(symbol, date.today().isoformat())
-                    print(f"   ✅ Added {symbol} to BUY (no alert)")
+                    
+                    if notion.symbol_exists_in_buy(symbol):
+                        print(f"   ℹ️  {symbol} already in BUY (skipped)")
+                    else:
+                        notion.add_to_buy(symbol, date.today().isoformat())
+                        print(f"   ✅ Added {symbol} to BUY (no alert)")
                 continue
             
             print("✅ CONFIRMED!")
@@ -658,6 +692,9 @@ def run_wavetrend_scan(cfg: Config):
             
             # Get indicator values for message
             df = daily_ohlc(symbol)
+            if df is None or len(df) < 30:
+                logger.warning("confirmed_signal_data_unavailable", symbol=symbol)
+                continue
             wt = wavetrend(df, channel_length=10, average_length=21)
             stoch = stochastic_rsi(df['Close'])
             mfi_val = mfi(df)
@@ -726,10 +763,13 @@ def run_wavetrend_scan(cfg: Config):
                     notion.delete_page(page_id)
                     print(f"   🗑️  Removed {symbol} from signals")
                 
-                # Add to buy database (if configured)
+                # Add to buy database (if configured and not already exists)
                 if cfg.notion.buy_database_id:
-                    notion.add_to_buy(symbol, date.today().isoformat())
-                    print(f"   ✅ Added {symbol} to BUY database")
+                    if notion.symbol_exists_in_buy(symbol):
+                        print(f"   ℹ️  {symbol} already in BUY database (skipped)")
+                    else:
+                        notion.add_to_buy(symbol, date.today().isoformat())
+                        print(f"   ✅ Added {symbol} to BUY database")
             except Exception as e:
                 logger.error("wavetrend_telegram_failed", symbol=symbol, error=str(e))
                 print(f"   ⚠️  Failed to send Telegram: {e}")

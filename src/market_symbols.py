@@ -5,6 +5,7 @@ Market scanner için kullanılır.
 
 import logging
 from typing import List
+from .constants import MARKET_CAP_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -86,4 +87,4 @@ def get_market_cap_threshold() -> float:
     Returns:
         float: Minimum market cap (50 milyar USD)
     """
-    return 50_000_000_000  # 50B USD
+    return MARKET_CAP_THRESHOLD
