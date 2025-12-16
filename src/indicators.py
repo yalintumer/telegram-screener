@@ -136,14 +136,14 @@ def wavetrend(df: pd.DataFrame, channel_length: int = 10, average_length: int = 
     return pd.DataFrame({"wt1": wt1, "wt2": wt2})
 
 
-def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = 3, 
+def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = 5, 
                   oversold_level: int = -53) -> bool:
     """
     Detect WaveTrend buy signal (bullish cross in oversold zone)
     
     Args:
         wt_df: DataFrame with wt1, wt2 columns
-        lookback_days: Check for cross in last N days (default: 3)
+        lookback_days: Check for cross in last N days (default: 5)
         oversold_level: Oversold threshold (default: -53)
     
     Returns:
@@ -196,13 +196,13 @@ def stochastic_rsi(close: pd.Series, rsi_period=14, stoch_period=14, k=3, d=3) -
     return pd.DataFrame({"rsi": r, "k": k_line, "d": d_line})
 
 
-def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 3) -> bool:
+def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 5) -> bool:
     """
     Stochastic RSI buy signal detection.
     
     Args:
         df: DataFrame with columns 'rsi', 'k', 'd'
-        lookback_days: Check for cross in last N days (default: 3)
+        lookback_days: Check for cross in last N days (default: 5)
     
     Returns True if K line crosses above D line with sustained bullish momentum.
     
