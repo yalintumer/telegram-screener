@@ -806,15 +806,29 @@ def run_continuous(cfg: Config, interval: int = 3600):
     
     print(f"🔄 Continuous mode started")
     print(f"   Interval: {interval}s ({interval // 60} minutes)")
+    print(f"   Market scan: Daily (first cycle of each day)")
     print(f"   Press Ctrl+C to stop\n")
     
     cycle = 1
+    last_market_scan_date = None  # Track when we last ran market scan
     
     try:
         while True:
             print(f"{'='*60}")
             print(f"📊 Scan Cycle {cycle}")
             print(f"{'='*60}\n")
+            
+            # Stage 0: Market Scanner (once per day)
+            today = date.today()
+            if last_market_scan_date != today:
+                try:
+                    print("🔍 Stage 0: Daily Market Scanner (S&P 500)...\n")
+                    run_market_scan(cfg)
+                    last_market_scan_date = today
+                    print()
+                except Exception as e:
+                    logger.error("stage0_market_scan_error", cycle=cycle, error=str(e))
+                    print(f"❌ Error in market scan: {e}\n")
             
             # Stage 1: Watchlist → Stoch RSI + MFI → Signals
             try:
