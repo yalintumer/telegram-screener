@@ -1,6 +1,7 @@
 import requests
 from .logger import logger
 from .exceptions import TelegramError
+from .rate_limiter import rate_limit
 
 
 class TelegramClient:
@@ -20,6 +21,9 @@ class TelegramClient:
         Raises:
             TelegramError: If send fails after retries
         """
+        # Rate limit Telegram API calls
+        rate_limit("telegram")
+        
         url = f"{self.base}/sendMessage"
         try:
             logger.debug("telegram.sending", preview=text[:50])

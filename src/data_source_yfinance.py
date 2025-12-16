@@ -7,6 +7,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from .logger import logger
 from .exceptions import DataSourceError
+from .rate_limiter import rate_limit
 
 
 def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame | None:
@@ -22,6 +23,9 @@ def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame | None:
         Returns None if data fetch fails or insufficient data
     """
     try:
+        # Rate limit yfinance calls
+        rate_limit("yfinance")
+        
         logger.info("yfinance.fetch", symbol=symbol, days=days)
         
         # Calculate date range
@@ -69,6 +73,9 @@ def weekly_ohlc(symbol: str, weeks: int = 52) -> pd.DataFrame | None:
         Returns None if data fetch fails or insufficient data
     """
     try:
+        # Rate limit yfinance calls
+        rate_limit("yfinance")
+        
         logger.info("yfinance.fetch_weekly", symbol=symbol, weeks=weeks)
         
         # Calculate date range

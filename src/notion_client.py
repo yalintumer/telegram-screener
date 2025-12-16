@@ -4,6 +4,7 @@ from typing import List, Dict, Tuple, Optional
 import requests
 from .logger import logger
 from .exceptions import ConfigError
+from .rate_limiter import rate_limit
 
 # Default timeout for all Notion API requests (seconds)
 NOTION_TIMEOUT = 30
@@ -45,7 +46,7 @@ class NotionClient:
     
     def _request(self, method: str, url: str, **kwargs) -> requests.Response:
         """
-        Make HTTP request with timeout.
+        Make HTTP request with timeout and rate limiting.
         
         Args:
             method: HTTP method (get, post, patch, delete)
@@ -55,6 +56,9 @@ class NotionClient:
         Returns:
             Response object
         """
+        # Rate limit Notion API calls
+        rate_limit("notion")
+        
         kwargs.setdefault('timeout', NOTION_TIMEOUT)
         kwargs.setdefault('headers', self.headers)
         return getattr(requests, method)(url, **kwargs)
