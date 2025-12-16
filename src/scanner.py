@@ -32,11 +32,11 @@ from .telegram_client import TelegramClient
 def update_signal_performance(signal_tracker: SignalTracker, lookback_days: int = 7) -> dict:
     """
     Update performance metrics for recent signals.
-    
+
     Args:
         signal_tracker: SignalTracker instance
         lookback_days: Number of days to wait before evaluating signal (default 7)
-    
+
     Returns:
         Dictionary with update statistics
     """
@@ -78,7 +78,7 @@ def update_signal_performance(signal_tracker: SignalTracker, lookback_days: int 
 def run_market_scan(cfg: Config) -> dict | None:
     """
     Run Stage 1 market scanner: S&P 500 → filter + signal → Signals DB.
-    
+
     Filters (must pass ALL):
     1. Market Cap >= 50B USD (cached for 24h)
     2. Stoch RSI (3,3,14,14) - D < 20 (oversold)
@@ -86,7 +86,7 @@ def run_market_scan(cfg: Config) -> dict | None:
     4. MFI (14) <= 40 (oversold)
     5. Stoch RSI bullish cross (K crosses above D in oversold zone)
     6. MFI in 3-day uptrend
-    
+
     Returns:
         dict with scan statistics, or None on error
     """
@@ -247,12 +247,12 @@ def run_market_scan(cfg: Config) -> dict | None:
 def run_wavetrend_scan(cfg: Config) -> dict | None:
     """
     Run Stage 2 scan: Check signals database for WaveTrend confirmation.
-    
+
     Features:
     - Alert fatigue prevention (max 5 alerts/day)
     - Symbol cooldown (7 days between same symbol alerts)
     - Signal performance tracking
-    
+
     Returns:
         dict with scan statistics, or None on error
     """
@@ -460,11 +460,11 @@ def run_wavetrend_scan(cfg: Config) -> dict | None:
 def run_continuous(cfg: Config, interval: int = 3600) -> None:
     """
     Run scanner continuously at specified interval.
-    
+
     New simplified 2-stage architecture:
     - Stage 1: Market scan (S&P 500 → filter + signal → Signals DB) - once per day
     - Stage 2: WaveTrend confirmation (Signals DB → Buy DB) - every cycle
-    
+
     Args:
         cfg: Application configuration
         interval: Scan interval in seconds (default: 3600 = 1 hour)

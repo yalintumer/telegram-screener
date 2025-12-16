@@ -49,12 +49,12 @@ class SignalTracker:
     def can_send_alert(self, symbol: str, daily_limit: int = 5, cooldown_days: int = 7) -> tuple[bool, str]:
         """
         Check if alert can be sent based on daily limit and cooldown.
-        
+
         Args:
             symbol: Stock symbol
             daily_limit: Maximum alerts per day (default: 5)
             cooldown_days: Days to wait before alerting same symbol again (default: 7)
-        
+
         Returns:
             (can_send, reason) tuple
         """
@@ -80,7 +80,7 @@ class SignalTracker:
     def record_alert(self, symbol: str, signal_data: dict):
         """
         Record that an alert was sent.
-        
+
         Args:
             symbol: Stock symbol
             signal_data: Dictionary with signal details (price, indicators, etc.)
@@ -144,11 +144,11 @@ class SignalTracker:
     def update_signal_performance(self, symbol: str, days_after: int = 5) -> dict | None:
         """
         Update performance for signals that are old enough to evaluate.
-        
+
         Args:
             symbol: Stock symbol to update
             days_after: Days after signal to check performance (default: 5)
-        
+
         Returns:
             Performance data or None if not ready
         """
@@ -232,10 +232,10 @@ class SignalTracker:
     def get_signal_stats(self, symbol: str | None = None) -> dict:
         """
         Get performance statistics for signals.
-        
+
         Args:
             symbol: Optional symbol to filter by
-        
+
         Returns:
             Dictionary with performance metrics
         """

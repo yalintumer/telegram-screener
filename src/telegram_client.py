@@ -11,7 +11,7 @@ from .rate_limiter import rate_limit
 class TelegramClient:
     """
     Telegram client with retry, connection pooling, and proper error handling.
-    
+
     Uses requests.Session for TCP connection reuse.
     Critical errors are NOT swallowed - they propagate up.
     Transient errors are retried with exponential backoff.
@@ -44,15 +44,15 @@ class TelegramClient:
     def send(self, text: str, parse_mode: str = "Markdown", critical: bool = False) -> bool:
         """
         Send Telegram message with retry logic.
-        
+
         Args:
             text: Message text
             parse_mode: Markdown or HTML
             critical: If True, raise exception on failure. If False, log and return False.
-            
+
         Returns:
             True if sent successfully, False if failed (only when critical=False)
-            
+
         Raises:
             TelegramError: If send fails and critical=True, or after max consecutive failures
         """

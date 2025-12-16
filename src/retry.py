@@ -29,7 +29,7 @@ def retry_with_backoff(
 ):
     """
     Decorator for retry with exponential backoff.
-    
+
     Args:
         max_attempts: Maximum number of attempts (default: 3)
         base_delay: Initial delay in seconds (default: 1.0)
@@ -38,7 +38,7 @@ def retry_with_backoff(
         jitter: Add random jitter to prevent thundering herd (default: True)
         retryable_exceptions: Tuple of exceptions to retry on
         on_retry: Optional callback(attempt, exception, delay) called before retry
-        
+
     Usage:
         @retry_with_backoff(max_attempts=3, retryable_exceptions=(requests.RequestException,))
         def call_api():
@@ -65,7 +65,7 @@ def retry_with_backoff(
                         raise RetryError(
                             f"{func.__name__} failed after {max_attempts} attempts: {e}",
                             last_exception=e
-                        )
+                        ) from e
 
                     # Calculate delay with exponential backoff
                     delay = min(base_delay * (exponential_base ** (attempt - 1)), max_delay)
@@ -98,7 +98,7 @@ def retry_with_backoff(
 def is_retryable_http_status(status_code: int) -> bool:
     """
     Check if HTTP status code is retryable.
-    
+
     Retryable: 429 (rate limit), 500, 502, 503, 504 (server errors)
     Not retryable: 400, 401, 403, 404 (client errors)
     """

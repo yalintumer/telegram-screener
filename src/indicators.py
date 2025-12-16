@@ -16,7 +16,7 @@ from .constants import (
 def rsi(series: pd.Series, period: int = STOCH_RSI_PERIOD) -> pd.Series:
     """
     Calculate RSI (Relative Strength Index)
-    
+
     Handles division by zero when loss=0 (all gains, no losses)
     """
     delta = series.diff()
@@ -33,14 +33,14 @@ def rsi(series: pd.Series, period: int = STOCH_RSI_PERIOD) -> pd.Series:
 def mfi(df: pd.DataFrame, period: int = MFI_PERIOD) -> pd.Series:
     """
     Calculate MFI (Money Flow Index)
-    
+
     MFI uses both price and volume to measure buying/selling pressure.
     Similar to RSI but volume-weighted.
-    
+
     Args:
         df: DataFrame with High, Low, Close, Volume columns
         period: Lookback period (default: 14)
-    
+
     Returns:
         Series with MFI values (0-100)
     """
@@ -71,15 +71,15 @@ def mfi(df: pd.DataFrame, period: int = MFI_PERIOD) -> pd.Series:
 def mfi_uptrend(mfi_series: pd.Series, days: int = MFI_UPTREND_DAYS) -> bool:
     """
     Check if MFI shows uptrend pattern
-    
+
     Args:
         mfi_series: Series of MFI values
         days: Number of days to look back (default: 3)
-    
+
     Returns:
         True if MFI at day 3 is greater than both day 2 and day 1
         This captures V-shaped recovery patterns
-        
+
     Pattern: P3 > P2 AND P3 > P1
     Where P1=today, P2=yesterday, P3=2 days ago
     """
@@ -112,20 +112,20 @@ def mfi_uptrend(mfi_series: pd.Series, days: int = MFI_UPTREND_DAYS) -> bool:
 def wavetrend(df: pd.DataFrame, channel_length: int = 10, average_length: int = 21) -> pd.DataFrame:
     """
     Calculate WaveTrend indicator by LazyBear
-    
+
     WaveTrend is a momentum oscillator that identifies overbought/oversold conditions
     and trend changes through wt1/wt2 crossovers.
-    
+
     Args:
         df: DataFrame with High, Low, Close columns
         channel_length: Channel length (n1, default: 10)
         average_length: Average length (n2, default: 21)
-    
+
     Returns:
         DataFrame with columns: wt1, wt2
         - wt1: Main wave (tci)
         - wt2: Signal line (SMA of wt1, period 4)
-    
+
     Levels:
         Overbought: > 60 (extreme), > 53 (warning)
         Oversold: < -60 (extreme), < -53 (warning)
@@ -158,15 +158,15 @@ def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS
                   oversold_level: int = WAVETREND_OVERSOLD) -> bool:
     """
     Detect WaveTrend buy signal (bullish cross in oversold zone)
-    
+
     Args:
         wt_df: DataFrame with wt1, wt2 columns
         lookback_days: Check for cross in last N days (default: 5)
         oversold_level: Oversold threshold (default: -53)
-    
+
     Returns:
         True if wt1 crosses above wt2 in oversold zone
-    
+
     Conditions:
         1. wt1 crosses above wt2 (bullish cross)
         2. Cross happens in oversold zone (wt1 or wt2 < oversold_level)
@@ -218,17 +218,17 @@ def stochastic_rsi(close: pd.Series, rsi_period=STOCH_RSI_PERIOD, stoch_period=S
 def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS) -> bool:
     """
     Stochastic RSI buy signal detection.
-    
+
     Args:
         df: DataFrame with columns 'rsi', 'k', 'd'
         lookback_days: Check for cross in last N days (default: 5)
-    
+
     Returns True if K line crosses above D line in oversold zone.
-    
+
     Conditions for TRUE bullish crossover:
     1. K line crosses above D line (K was below, now above)
     2. Cross happens in oversold zone (K or D below 20)
-    
+
     Looks back N days to catch recent crosses that may have been missed.
     """
     min_required = lookback_days + 2
@@ -270,20 +270,20 @@ def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS) -
 def bollinger_bands(data: pd.Series, period: int = 20, std_dev: float = 2.0) -> dict:
     """
     Calculate Bollinger Bands.
-    
+
     Bollinger Bands consist of:
     - Middle Band: Simple Moving Average (SMA)
     - Upper Band: SMA + (Standard Deviation × std_dev)
     - Lower Band: SMA - (Standard Deviation × std_dev)
-    
+
     Args:
         data: Price series (typically Close prices)
         period: SMA period (default: 20)
         std_dev: Number of standard deviations (default: 2.0)
-    
+
     Returns:
         dict with 'upper', 'middle', 'lower' bands as pd.Series
-    
+
     Example:
         >>> bb = bollinger_bands(df['Close'], period=20, std_dev=2.0)
         >>> current_price = df['Close'].iloc[-1]

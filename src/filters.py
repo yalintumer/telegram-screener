@@ -41,25 +41,25 @@ def check_market_filter(
 ) -> dict | None:
     """
     Check if symbol passes market scanner filters (Stage 1).
-    
+
     Uses hybrid approach:
     - yfinance: Market cap (fast, unlimited)
     - Alpha Vantage: Technical indicators (precise, if key provided)
-    
+
     Filters (must pass ALL):
     1. Market Cap >= 50B USD (cached for 24h)
     2. Stoch RSI (3,3,14,14) - D < 20 (oversold)
     3. Price < Bollinger Lower Band (20 period)
     4. MFI (14) <= 40 (weak momentum)
-    
+
     Args:
         symbol: Stock ticker symbol
         cache: Optional MarketCapCache instance for performance
         alpha_vantage_key: Optional Alpha Vantage API key for precise indicators
-    
+
     Returns:
         dict with 'passed' (bool) and indicator values, or None if data unavailable
-        
+
     Examples:
         >>> result = check_market_filter("AAPL")
         >>> if result and result['passed']:
@@ -159,16 +159,16 @@ def check_market_filter(
 def check_signal_criteria(symbol: str) -> dict | None:
     """
     Check if symbol passes signal criteria (Stoch RSI cross + MFI uptrend).
-    
+
     This is the second part of Stage 1 filtering, applied after market_filter passes.
-    
+
     Criteria:
     1. Stoch RSI bullish cross (K crosses above D in oversold zone)
     2. MFI shows 3-day uptrend (accumulation starting)
-    
+
     Args:
         symbol: Stock ticker symbol
-        
+
     Returns:
         dict with indicator values if signal found, None otherwise
     """
@@ -209,18 +209,18 @@ def check_signal_criteria(symbol: str) -> dict | None:
 def check_wavetrend_signal(symbol: str, use_multi_timeframe: bool = True) -> bool:
     """
     Check if symbol has WaveTrend buy signal (Stage 2 confirmation).
-    
+
     Conditions:
     1. Daily: WaveTrend WT1 crosses above WT2 in oversold zone (< -53)
     2. Weekly (optional): WaveTrend must NOT be extremely overbought (WT1 < 60)
-    
+
     Args:
         symbol: Stock ticker symbol
         use_multi_timeframe: If True, confirms daily signal with weekly trend
-    
+
     Returns:
         True if WaveTrend buy signal detected
-        
+
     Examples:
         >>> if check_wavetrend_signal("AAPL"):
         ...     print("WaveTrend confirmed - ready to buy!")
@@ -279,10 +279,10 @@ def check_wavetrend_signal(symbol: str, use_multi_timeframe: bool = True) -> boo
 def get_wavetrend_values(symbol: str) -> dict | None:
     """
     Get current WaveTrend indicator values for a symbol.
-    
+
     Args:
         symbol: Stock ticker symbol
-        
+
     Returns:
         dict with 'daily_wt1', 'daily_wt2', 'weekly_wt1' values, or None if unavailable
     """

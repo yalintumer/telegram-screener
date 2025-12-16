@@ -12,7 +12,15 @@ import os
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
 
+from .filters import (
+    check_wavetrend_signal,
+)
 from .logger import logger
+from .scanner import (
+    run_continuous,
+    run_market_scan,
+    run_wavetrend_scan,
+)
 
 # =============================================================================
 # Sentry Initialization (Error Tracking)
@@ -39,18 +47,8 @@ if SENTRY_DSN:
 
 
 # =============================================================================
-# Re-exports from scanner.py (for backwards compatibility)
+# Backwards compatibility aliases
 # =============================================================================
-# Re-exports from filters.py
-from .filters import (
-    check_wavetrend_signal,
-)
-from .scanner import (
-    run_continuous,
-    run_market_scan,
-    run_wavetrend_scan,
-)
-
 # Alias for backwards compatibility
 check_symbol_wavetrend = check_wavetrend_signal
 
@@ -61,7 +59,7 @@ check_symbol_wavetrend = check_wavetrend_signal
 def main(argv: list[str] | None = None) -> int:
     """
     CLI entry point.
-    
+
     Delegates to cli.py for argument parsing and dispatch.
     """
     from .cli import run_cli

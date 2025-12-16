@@ -69,13 +69,13 @@ def run_cli(
 ) -> int:
     """
     Parse arguments and dispatch to appropriate scan function.
-    
+
     Args:
         argv: Command line arguments (None for sys.argv)
         market_scan_fn: Function to run Stage 1 market scan
         wavetrend_scan_fn: Function to run Stage 2 WaveTrend scan
         continuous_fn: Function to run continuous scanning
-    
+
     Returns:
         Exit code (0 for success, non-zero for error)
     """
@@ -141,7 +141,7 @@ def run_cli(
 def main(argv: list[str] | None = None) -> int:
     """
     CLI entry point (backwards compatible).
-    
+
     Note: This imports from main.py to avoid circular imports.
     """
     # Late import to avoid circular dependency

@@ -92,7 +92,7 @@ class Config(BaseModel):
         try:
             raw = yaml.safe_load(p.read_text()) or {}
         except Exception as e:
-            raise ConfigError(f"Failed to parse YAML: {e}")
+            raise ConfigError(f"Failed to parse YAML: {e}") from e
 
         # Environment variable overrides for sensitive data
         if bot := os.getenv("TELEGRAM_BOT_TOKEN"):
@@ -115,4 +115,4 @@ class Config(BaseModel):
         try:
             return cls(**raw)
         except Exception as e:
-            raise ConfigError(f"Invalid configuration: {e}")
+            raise ConfigError(f"Invalid configuration: {e}") from e

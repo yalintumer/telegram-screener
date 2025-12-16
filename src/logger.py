@@ -11,7 +11,7 @@ _correlation_id: ContextVar[str] = ContextVar('correlation_id', default='')
 
 def set_correlation_id(correlation_id: str = None) -> str:
     """
-    Set correlation ID for current context. 
+    Set correlation ID for current context.
     If not provided, generates a new one.
     Returns the correlation ID.
     """
@@ -61,11 +61,11 @@ class StructuredLogger:
 def setup_logger(level: str = "INFO", log_file: bool = True):
     """
     Setup logging with console and optional file output
-    
+
     Args:
         level: Log level (DEBUG, INFO, WARNING, ERROR)
         log_file: Whether to also log to file
-        
+
     Returns:
         Configured logger instance
     """

@@ -14,11 +14,11 @@ from .rate_limiter import rate_limit
 def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame | None:
     """
     Fetch daily OHLC data from Yahoo Finance
-    
+
     Args:
         symbol: Stock ticker symbol
         days: Number of days of historical data
-        
+
     Returns:
         DataFrame with columns: Date, Open, High, Low, Close, Volume
         Returns None if data fetch fails or insufficient data
@@ -64,11 +64,11 @@ def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame | None:
 def weekly_ohlc(symbol: str, weeks: int = 52) -> pd.DataFrame | None:
     """
     Fetch weekly OHLC data from Yahoo Finance
-    
+
     Args:
         symbol: Stock ticker symbol
         weeks: Number of weeks of historical data
-        
+
     Returns:
         DataFrame with columns: Date, Open, High, Low, Close, Volume
         Returns None if data fetch fails or insufficient data

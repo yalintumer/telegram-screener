@@ -18,7 +18,7 @@ class AlphaVantageSource:
     def __init__(self, api_key: str):
         """
         Initialize Alpha Vantage client
-        
+
         Args:
             api_key: Alpha Vantage API key
         """
@@ -32,11 +32,11 @@ class AlphaVantageSource:
     def daily_ohlc(self, symbol: str, outputsize: str = 'compact') -> pd.DataFrame | None:
         """
         Fetch daily OHLC data from Alpha Vantage
-        
+
         Args:
             symbol: Stock ticker symbol
             outputsize: 'compact' (100 days) or 'full' (20+ years)
-            
+
         Returns:
             DataFrame with columns: Date (index), Open, High, Low, Close, Volume
             Returns None if data fetch fails
@@ -80,10 +80,10 @@ class AlphaVantageSource:
     def get_latest_price(self, symbol: str) -> float | None:
         """
         Get latest closing price
-        
+
         Args:
             symbol: Stock ticker symbol
-            
+
         Returns:
             Latest closing price or None
         """
@@ -104,10 +104,10 @@ _alpha_vantage_instance: AlphaVantageSource | None = None
 def get_alpha_vantage(api_key: str) -> AlphaVantageSource:
     """
     Get or create Alpha Vantage instance (singleton pattern)
-    
+
     Args:
         api_key: Alpha Vantage API key
-        
+
     Returns:
         AlphaVantageSource instance
     """
@@ -122,12 +122,12 @@ def get_alpha_vantage(api_key: str) -> AlphaVantageSource:
 def alpha_vantage_ohlc(symbol: str, api_key: str, days: int = 100) -> pd.DataFrame | None:
     """
     Convenience function to fetch OHLC data
-    
+
     Args:
         symbol: Stock ticker symbol
         api_key: Alpha Vantage API key
         days: Number of days (100 for compact, more for full)
-        
+
     Returns:
         DataFrame with OHLC data
     """

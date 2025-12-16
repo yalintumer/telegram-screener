@@ -15,11 +15,11 @@ HEALTH_FILE = Path("health.json")
 class HealthCheck:
     """
     File-based health check for monitoring.
-    
+
     Usage:
         health = HealthCheck()
         health.update(status="healthy", last_scan_symbols=50)
-        
+
     Check health:
         cat health.json
         # or

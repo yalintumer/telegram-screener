@@ -45,10 +45,10 @@ class MarketCapCache:
     def get(self, symbol: str) -> float | None:
         """
         Get cached market cap for symbol.
-        
+
         Args:
             symbol: Stock symbol
-        
+
         Returns:
             Market cap value or None if not cached or expired
         """
@@ -71,7 +71,7 @@ class MarketCapCache:
     def set(self, symbol: str, market_cap: float):
         """
         Cache market cap for symbol.
-        
+
         Args:
             symbol: Stock symbol
             market_cap: Market cap value in USD

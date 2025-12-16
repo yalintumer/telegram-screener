@@ -18,7 +18,7 @@ from .logger import logger
 class RateLimiter:
     """
     Token bucket rate limiter with per-service tracking.
-    
+
     Usage:
         limiter = RateLimiter()
         limiter.wait("yfinance")  # Blocks if rate limit exceeded
@@ -41,11 +41,11 @@ class RateLimiter:
     def wait(self, service: str, cost: int = 1) -> float:
         """
         Wait if necessary to respect rate limit, then consume tokens.
-        
+
         Args:
             service: Service name (yfinance, notion, telegram, etc.)
             cost: Number of tokens to consume (default: 1)
-            
+
         Returns:
             Seconds waited (0 if no wait needed)
         """
@@ -131,7 +131,7 @@ def get_rate_limiter() -> RateLimiter:
 def rate_limit(service: str, cost: int = 1) -> float:
     """
     Convenience function to rate limit a service call.
-    
+
     Usage:
         rate_limit("yfinance")
         response = yf.Ticker(symbol).history(...)

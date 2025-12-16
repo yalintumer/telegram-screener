@@ -13,10 +13,10 @@ logger = logging.getLogger(__name__)
 def get_sp500_symbols() -> list[str]:
     """
     S&P 500 endeksindeki hisse sembollerini döndürür.
-    
+
     Not: Bu liste periyodik olarak güncellenmelidir (yılda 1-2 kez).
     Kaynak: S&P 500 endeksi resmi bileşenleri.
-    
+
     Returns:
         List[str]: S&P 500 hisse sembolleri
     """
@@ -83,7 +83,7 @@ def get_sp500_symbols() -> list[str]:
 def get_market_cap_threshold() -> float:
     """
     Market scanner için minimum market cap eşiği (USD).
-    
+
     Returns:
         float: Minimum market cap (50 milyar USD)
     """

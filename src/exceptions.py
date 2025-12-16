@@ -5,7 +5,7 @@ from typing import Any
 
 class TVScreenerError(Exception):
     """Base exception for screener errors with enhanced context
-    
+
     Attributes:
         message: Error message
         context: Additional context dictionary (e.g., symbol, operation)
@@ -32,7 +32,7 @@ class TVScreenerError(Exception):
 
 class OCRError(TVScreenerError):
     """OCR extraction failed
-    
+
     Common causes:
     - Tesseract not installed or not in PATH
     - Invalid image format or corrupted file
@@ -43,7 +43,7 @@ class OCRError(TVScreenerError):
 
 class DataSourceError(TVScreenerError):
     """Data source fetch failed
-    
+
     Common causes:
     - Network connectivity issues
     - API rate limit exceeded
@@ -55,7 +55,7 @@ class DataSourceError(TVScreenerError):
 
 class TelegramError(TVScreenerError):
     """Telegram API communication failed
-    
+
     Common causes:
     - Invalid bot token or chat ID
     - Network connectivity issues
@@ -67,7 +67,7 @@ class TelegramError(TVScreenerError):
 
 class ConfigError(TVScreenerError):
     """Configuration validation failed
-    
+
     Common causes:
     - Missing or invalid config.yaml
     - Required fields missing
@@ -79,7 +79,7 @@ class ConfigError(TVScreenerError):
 
 class ValidationError(TVScreenerError):
     """Input validation failed
-    
+
     Common causes:
     - Invalid ticker symbol format
     - Out of range parameters
@@ -90,7 +90,7 @@ class ValidationError(TVScreenerError):
 
 class WatchlistError(TVScreenerError):
     """Watchlist operation failed
-    
+
     Common causes:
     - File system permissions
     - Corrupted watchlist.json
