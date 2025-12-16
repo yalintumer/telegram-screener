@@ -187,7 +187,13 @@ class SignalTracker:
                 # Calculate performance (price change after N days)
                 # Find the row closest to days_after from signal date
                 target_date = signal_date + timedelta(days=days_after)
-                future_prices = df[df.index >= target_date.date()]
+                # Normalize index to date for comparison (handles both DatetimeIndex and date index)
+                df_dates = df.index.normalize() if hasattr(df.index, 'normalize') else df.index
+                target_date_normalized = target_date.date() if hasattr(target_date, 'date') else target_date
+                # Compare using pandas Timestamp for consistency
+                import pandas as pd
+                target_ts = pd.Timestamp(target_date_normalized)
+                future_prices = df[df_dates >= target_ts]
                 
                 if len(future_prices) > 0:
                     future_price = float(future_prices["Close"].iloc[0])
