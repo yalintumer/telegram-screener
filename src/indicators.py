@@ -204,18 +204,15 @@ def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 5) -> bool:
         df: DataFrame with columns 'rsi', 'k', 'd'
         lookback_days: Check for cross in last N days (default: 5)
     
-    Returns True if K line crosses above D line with sustained bullish momentum.
+    Returns True if K line crosses above D line in oversold zone.
     
     Conditions for TRUE bullish crossover:
     1. K line crosses above D line (K was below, now above)
     2. Cross happens in oversold zone (K or D below 20)
-    3. K has SUSTAINED upward momentum (rising for 2+ days) - prevents dead cat bounces
-    4. D is not crashing (stable or rising)
     
     Looks back N days to catch recent crosses that may have been missed.
     """
-    # Need at least lookback_days + 2 rows for momentum check
-    min_required = lookback_days + 3  # Need 2 days back for momentum
+    min_required = lookback_days + 2
     if len(df) < min_required:
         return False
     
@@ -223,18 +220,16 @@ def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 5) -> bool:
     for i in range(1, lookback_days + 1):
         idx = -i
         prev_idx = idx - 1
-        prev_prev_idx = idx - 2  # For 2-day momentum check
         
-        # Double check boundary
-        if abs(prev_prev_idx) > len(df):
+        # Boundary check
+        if abs(prev_idx) > len(df):
             break
         
-        prev_prev = df.iloc[prev_prev_idx]
         prev = df.iloc[prev_idx]
         curr = df.iloc[idx]
         
         # NaN check
-        if any(pd.isna(v) for v in [prev_prev.k, prev.k, prev.d, curr.k, curr.d]):
+        if any(pd.isna(v) for v in [prev.k, prev.d, curr.k, curr.d]):
             continue
         
         # Cross up: K crosses above D
@@ -244,17 +239,8 @@ def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = 5) -> bool:
         oversold = (curr.k < 0.2 or curr.d < 0.2 or 
                    prev.k < 0.2 or prev.d < 0.2)
         
-        # CRITICAL: Check for SUSTAINED upward momentum (2 consecutive days rising)
-        # This prevents false positives from temporary bounces
-        k_rising_today = curr.k > prev.k
-        k_rising_yesterday = prev.k > prev_prev.k
-        sustained_uptrend = k_rising_today and k_rising_yesterday
-        
-        # D should not be crashing (stable or rising)
-        d_not_crashing = curr.d >= prev.d * 0.9  # D not falling more than 10%
-        
-        # Valid signal requires: cross + oversold + sustained K uptrend + D not crashing
-        valid_cross = cross_up and oversold and sustained_uptrend and d_not_crashing
+        # Valid signal requires: cross + oversold (simplified)
+        valid_cross = cross_up and oversold
         
         if valid_cross:
             return True
