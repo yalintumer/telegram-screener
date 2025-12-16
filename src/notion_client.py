@@ -5,6 +5,9 @@ import requests
 from .logger import logger
 from .exceptions import ConfigError
 
+# Default timeout for all Notion API requests (seconds)
+NOTION_TIMEOUT = 30
+
 
 class NotionClient:
     """Client for interacting with Notion API to fetch watchlist"""
@@ -39,6 +42,22 @@ class NotionClient:
         # Schema cache to avoid repeated API calls
         self._schema_cache: Dict[str, dict] = {}
     
+    def _request(self, method: str, url: str, **kwargs) -> requests.Response:
+        """
+        Make HTTP request with timeout.
+        
+        Args:
+            method: HTTP method (get, post, patch, delete)
+            url: Request URL
+            **kwargs: Additional arguments for requests
+            
+        Returns:
+            Response object
+        """
+        kwargs.setdefault('timeout', NOTION_TIMEOUT)
+        kwargs.setdefault('headers', self.headers)
+        return getattr(requests, method)(url, **kwargs)
+    
     def _get_database_schema(self, database_id: str) -> Optional[dict]:
         """
         Get database schema with caching.
@@ -54,7 +73,7 @@ class NotionClient:
         
         try:
             schema_url = f"{self.base_url}/databases/{database_id}"
-            schema_response = requests.get(schema_url, headers=self.headers)
+            schema_response = requests.get(schema_url, headers=self.headers, timeout=NOTION_TIMEOUT)
             schema_response.raise_for_status()
             schema_data = schema_response.json()
             
@@ -91,7 +110,7 @@ class NotionClient:
         url = f"{self.base_url}/databases/{self.database_id}/query"
         
         try:
-            response = requests.post(url, headers=self.headers, json={})
+            response = requests.post(url, headers=self.headers, json={}, timeout=NOTION_TIMEOUT)
             response.raise_for_status()
             
             data = response.json()
@@ -214,7 +233,7 @@ class NotionClient:
             
             # Create the page
             create_url = f"{self.base_url}/pages"
-            response = requests.post(create_url, headers=self.headers, json=payload)
+            response = requests.post(create_url, headers=self.headers, json=payload, timeout=NOTION_TIMEOUT)
             response.raise_for_status()
             logger.info("notion.signal_added", symbol=symbol, date=signal_date, title_prop=title_property)
             return True
@@ -248,7 +267,7 @@ class NotionClient:
             logger.info("notion.querying_signals_db", database_id=self.signals_database_id)
             url = f"{self.base_url}/databases/{self.signals_database_id}/query"
             
-            response = requests.post(url, headers=self.headers, json={})
+            response = requests.post(url, headers=self.headers, json={}, timeout=NOTION_TIMEOUT)
             response.raise_for_status()
             
             data = response.json()
@@ -311,7 +330,7 @@ class NotionClient:
         try:
             # First, query the database to get schema
             query_url = f"{self.base_url}/databases/{self.buy_database_id}"
-            response = requests.get(query_url, headers=self.headers)
+            response = requests.get(query_url, headers=self.headers, timeout=NOTION_TIMEOUT)
             response.raise_for_status()
             
             db_info = response.json()
@@ -357,7 +376,7 @@ class NotionClient:
             
             # Create the page
             create_url = f"{self.base_url}/pages"
-            response = requests.post(create_url, headers=self.headers, json=payload)
+            response = requests.post(create_url, headers=self.headers, json=payload, timeout=NOTION_TIMEOUT)
             response.raise_for_status()
             logger.info("notion.buy_added", symbol=symbol, date=signal_date, title_prop=title_property)
             return True
@@ -386,7 +405,7 @@ class NotionClient:
         try:
             # First check if page exists and is not already archived
             get_url = f"https://api.notion.com/v1/pages/{page_id}"
-            check_response = requests.get(get_url, headers=self.headers)
+            check_response = requests.get(get_url, headers=self.headers, timeout=NOTION_TIMEOUT)
             
             if check_response.status_code == 404:
                 logger.warning("notion.page_not_found", page_id=page_id)
@@ -402,7 +421,7 @@ class NotionClient:
             delete_url = f"https://api.notion.com/v1/pages/{page_id}"
             payload = {"archived": True}
             
-            response = requests.patch(delete_url, headers=self.headers, json=payload)
+            response = requests.patch(delete_url, headers=self.headers, json=payload, timeout=NOTION_TIMEOUT)
             response.raise_for_status()
             logger.info("notion.page_deleted", page_id=page_id)
             return True
@@ -456,7 +475,7 @@ class NotionClient:
         """
         try:
             url = f"{self.base_url}/databases/{database_id}/query"
-            response = requests.post(url, headers=self.headers, json={})
+            response = requests.post(url, headers=self.headers, json={}, timeout=NOTION_TIMEOUT)
             response.raise_for_status()
             
             data = response.json()
@@ -554,7 +573,7 @@ class NotionClient:
             
             # Create the page
             url = f"{self.base_url}/pages"
-            response = requests.post(url, headers=self.headers, json=payload)
+            response = requests.post(url, headers=self.headers, json=payload, timeout=NOTION_TIMEOUT)
             response.raise_for_status()
             
             logger.info("notion.watchlist_added", symbol=symbol, date=added_date)
@@ -606,7 +625,7 @@ class NotionClient:
                 }
             }
             
-            response = requests.patch(url, headers=self.headers, json=payload)
+            response = requests.patch(url, headers=self.headers, json=payload, timeout=NOTION_TIMEOUT)
             response.raise_for_status()
             
             logger.info("notion.watchlist_date_updated", symbol=symbol, page_id=page_id)
@@ -637,7 +656,7 @@ class NotionClient:
         
         try:
             url = f"{self.base_url}/databases/{self.signals_database_id}/query"
-            response = requests.post(url, headers=self.headers, json={})
+            response = requests.post(url, headers=self.headers, json={}, timeout=NOTION_TIMEOUT)
             response.raise_for_status()
             
             data = response.json()
