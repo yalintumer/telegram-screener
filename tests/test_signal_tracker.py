@@ -539,7 +539,6 @@ class TestSignalPerformanceTimestampComparison:
 
     def test_update_performance_with_datetime_index(self, tmp_path):
         """Should handle DatetimeIndex without numpy/Timestamp comparison error."""
-        import numpy as np
 
         data_file = tmp_path / "signals.json"
         tracker = SignalTracker(data_file=str(data_file))
@@ -565,7 +564,7 @@ class TestSignalPerformanceTimestampComparison:
 
         with patch("src.data_source_yfinance.daily_ohlc", return_value=mock_df):
             # This should NOT raise: '>=' not supported between 'numpy.ndarray' and 'Timestamp'
-            result = tracker.update_signal_performance("TEST", days_after=5)
+            tracker.update_signal_performance("TEST", days_after=5)
 
         # Verify performance was calculated
         assert tracker.data["signal_history"][0].get("performance") is not None
@@ -602,7 +601,7 @@ class TestSignalPerformanceTimestampComparison:
 
         with patch("src.data_source_yfinance.daily_ohlc", return_value=mock_df):
             # Should not raise TypeError
-            result = tracker.update_signal_performance("TEST", days_after=5)
+            tracker.update_signal_performance("TEST", days_after=5)
 
         assert tracker.data["signal_history"][0].get("performance") is not None
 
@@ -636,6 +635,6 @@ class TestSignalPerformanceTimestampComparison:
 
         with patch("src.data_source_yfinance.daily_ohlc", return_value=mock_df):
             # Should handle timezone conversion gracefully
-            result = tracker.update_signal_performance("TEST", days_after=5)
+            tracker.update_signal_performance("TEST", days_after=5)
 
         assert tracker.data["signal_history"][0].get("performance") is not None

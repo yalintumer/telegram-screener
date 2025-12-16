@@ -1,50 +1,52 @@
 """
 Test error handling and edge cases
 """
-import pytest
 from unittest.mock import Mock, patch
+
+import pytest
+
+from src.data_source_yfinance import daily_ohlc
+from src.exceptions import ConfigError, TelegramError
 from src.notion_client import NotionClient
 from src.telegram_client import TelegramClient
-from src.data_source_yfinance import daily_ohlc
-from src.exceptions import ConfigError, TelegramError, DataSourceError
 
 
 class TestNotionClientErrorHandling:
     """Test Notion API error handling"""
-    
+
     def test_invalid_api_token(self):
         """Test with invalid API token"""
         with pytest.raises(ConfigError):
             NotionClient("YOUR_TOKEN", signals_database_id="signals_db", buy_database_id="buy_db")
-    
+
     def test_invalid_signals_database_id(self):
         """Test with invalid signals database ID"""
         with pytest.raises(ConfigError):
             NotionClient("valid_token", signals_database_id="YOUR_DATABASE", buy_database_id="buy_db")
-    
+
     @patch('requests.post')
     def test_network_error_handling(self, mock_post):
         """Test handling of network errors - graceful degradation"""
         mock_post.side_effect = Exception("Network error")
-        
+
         client = NotionClient("ntn_test123", signals_database_id="signals_db", buy_database_id="buy_db")
-        
+
         # Network errors should return empty results gracefully (no exception raised)
         symbols, mapping = client.get_signals()
-        
+
         # Should return empty results, not crash
         assert symbols == []
         assert mapping == {}
-    
+
     @patch('requests.post')
     def test_empty_database_response(self, mock_post):
         """Test handling of empty database"""
         mock_post.return_value.json.return_value = {"results": []}
         mock_post.return_value.raise_for_status = Mock()
-        
+
         client = NotionClient("ntn_test123", signals_database_id="signals_db", buy_database_id="buy_db")
         symbols, mapping = client.get_signals()
-        
+
         assert symbols == []
         assert mapping == {}
 
@@ -59,7 +61,7 @@ class TestTelegramClientErrorHandling:
 
         # Non-critical send returns False on failure
         result = client.send("Test message")
-        assert result == False
+        assert not result
 
     @patch('src.telegram_client.time.sleep')  # Skip retry delays
     def test_invalid_bot_token_critical(self, mock_sleep):
@@ -80,7 +82,7 @@ class TestTelegramClientErrorHandling:
 
         # Non-critical returns False
         result = client.send("Test")
-        assert result == False
+        assert not result
 
     @patch('src.telegram_client.time.sleep')  # Skip retry delays
     @patch('requests.post')
@@ -102,12 +104,12 @@ class TestTelegramClientErrorHandling:
         mock_response.headers = {'Retry-After': '1'}
         mock_response.raise_for_status.side_effect = Exception("Rate limited")
         mock_post.return_value = mock_response
-        
+
         client = TelegramClient("bot123", "chat123")
 
         # Non-critical returns False
         result = client.send("Test")
-        assert result == False
+        assert not result
 
     @patch('src.telegram_client.time.sleep')  # Skip retry delays
     @patch('requests.post')
@@ -120,7 +122,7 @@ class TestTelegramClientErrorHandling:
         # First 4 failures should return False
         for _ in range(4):
             result = client.send("Test")
-            assert result == False
+            assert not result
 
         # 5th failure should raise
         with pytest.raises(TelegramError):
@@ -129,26 +131,26 @@ class TestTelegramClientErrorHandling:
 
 class TestDataSourceErrorHandling:
     """Test data source error handling"""
-    
+
     def test_invalid_symbol(self):
         """Test with invalid stock symbol"""
         result = daily_ohlc("INVALID_SYMBOL_XYZ123")
-        
+
         # Should return None for invalid symbols
         assert result is None
-    
+
     @patch('yfinance.Ticker')
     def test_network_failure(self, mock_ticker):
         """Test yfinance network failure"""
         mock_instance = Mock()
         mock_instance.history.side_effect = Exception("Network error")
         mock_ticker.return_value = mock_instance
-        
+
         result = daily_ohlc("AAPL")
-        
+
         # Should handle gracefully
         assert result is None
-    
+
     @patch('yfinance.Ticker')
     def test_empty_data_response(self, mock_ticker):
         """Test empty data from yfinance"""
@@ -156,21 +158,21 @@ class TestDataSourceErrorHandling:
         mock_instance = Mock()
         mock_instance.history.return_value = pd.DataFrame()  # Empty
         mock_ticker.return_value = mock_instance
-        
+
         result = daily_ohlc("AAPL")
-        
+
         # Should return None for empty data
         assert result is None
 
 
 class TestConfigValidation:
     """Test configuration validation"""
-    
+
     def test_missing_required_fields(self):
         """Test config with missing fields"""
+
         from src.config import Config
-        import yaml
-        
+
         # Create invalid config
         invalid_config = {
             "telegram": {
@@ -178,14 +180,14 @@ class TestConfigValidation:
                 # Missing chat_id
             }
         }
-        
+
         with pytest.raises(Exception):  # Pydantic ValidationError
             Config(**invalid_config)
-    
+
     def test_placeholder_values_rejected(self):
         """Test that placeholder values are rejected"""
         from src.config import NotionConfig
-        
+
         with pytest.raises(ValueError):
             NotionConfig(
                 api_token="YOUR_TOKEN",
@@ -193,7 +195,7 @@ class TestConfigValidation:
             )
 
 
-# Note: TestEndToEndErrorScenarios removed because it imports src.main 
+# Note: TestEndToEndErrorScenarios removed because it imports src.main
 # which depends on alpha_vantage module that isn't installed.
 # These tests should be re-enabled when alpha_vantage is added to requirements
 # or the dependency is removed from main.py

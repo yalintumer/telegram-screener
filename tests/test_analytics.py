@@ -271,32 +271,39 @@ class TestGenerateWeeklyReport:
 
         mock_tracker = Mock()
         mock_tracker.get_all_stats.return_value = {
-            "AAPL": {"evaluated": 5, "avg_return": 10.5, "win_rate": 60},
-            "GOOGL": {"evaluated": 3, "avg_return": -2.0, "win_rate": 33}
+            "total_signals": 8,
+            "evaluated": 5,
+            "pending": 3,
+            "avg_return": 10.5,
+            "win_rate": 60
         }
 
         report = analytics.generate_weekly_report(mock_tracker)
 
-        assert "Total Symbols Tracked: 2" in report
+        assert "Total Symbols Tracked: 8" in report
         assert "Signals Evaluated" in report
         assert "Average Return" in report
 
     def test_shows_top_performers(self, tmp_path):
-        """Should show top performing symbols."""
+        """Should show signal performance stats when signals are evaluated."""
         data_file = tmp_path / "analytics.json"
         analytics = Analytics(data_file=str(data_file))
 
         mock_tracker = Mock()
         mock_tracker.get_all_stats.return_value = {
-            "AAPL": {"evaluated": 5, "avg_return": 15.5, "win_rate": 80},
-            "MSFT": {"evaluated": 3, "avg_return": 10.0, "win_rate": 66},
-            "GOOGL": {"evaluated": 2, "avg_return": 5.0, "win_rate": 50},
+            "total_signals": 10,
+            "evaluated": 5,
+            "pending": 5,
+            "avg_return": 15.5,
+            "win_rate": 80
         }
 
         report = analytics.generate_weekly_report(mock_tracker)
 
-        assert "TOP PERFORMERS" in report
-        assert "AAPL" in report
+        # Check for performance stats in report
+        assert "Total Symbols Tracked: 10" in report
+        assert "Average Return: 15.5%" in report
+        assert "Win Rate: 80.0%" in report
 
     def test_handles_no_evaluated_signals(self, tmp_path):
         """Should handle case where no signals have been evaluated."""
@@ -305,7 +312,11 @@ class TestGenerateWeeklyReport:
 
         mock_tracker = Mock()
         mock_tracker.get_all_stats.return_value = {
-            "AAPL": {"evaluated": 0, "avg_return": 0, "win_rate": 0}
+            "total_signals": 5,
+            "evaluated": 0,
+            "pending": 5,
+            "avg_return": None,
+            "win_rate": None
         }
 
         report = analytics.generate_weekly_report(mock_tracker)

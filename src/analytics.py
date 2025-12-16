@@ -151,19 +151,14 @@ class Analytics:
         """
         stats = self.get_weekly_stats()
 
-        # Get signal performance from tracker
+        # Get signal performance from tracker (aggregate stats)
         all_stats = signal_tracker.get_all_stats()
 
-        # Calculate overall performance
-        total_signals = len(all_stats)
-        evaluated_signals = sum(1 for s in all_stats.values() if s['evaluated'] > 0)
-
-        if evaluated_signals > 0:
-            avg_return = sum(s['avg_return'] for s in all_stats.values() if s['evaluated'] > 0) / evaluated_signals
-            avg_win_rate = sum(s['win_rate'] for s in all_stats.values() if s['evaluated'] > 0) / evaluated_signals
-        else:
-            avg_return = 0
-            avg_win_rate = 0
+        # Extract values from aggregate stats
+        total_signals = all_stats.get('total_signals', 0)
+        evaluated_signals = all_stats.get('evaluated', 0)
+        avg_return = all_stats.get('avg_return') or 0
+        avg_win_rate = all_stats.get('win_rate') or 0
 
         # Build report
         lines = [
@@ -195,24 +190,9 @@ class Analytics:
 
         if evaluated_signals > 0:
             lines.extend([
-                f"   • Average Return: {avg_return:+.2f}%",
-                f"   • Average Win Rate: {avg_win_rate:.1f}%",
-                "",
-                "🏆 TOP PERFORMERS:",
+                f"   • Average Return: {avg_return:.1f}%",
+                f"   • Win Rate: {avg_win_rate:.1f}%",
             ])
-
-            # Sort by avg return and show top 5
-            sorted_symbols = sorted(
-                [(sym, s) for sym, s in all_stats.items() if s['evaluated'] > 0],
-                key=lambda x: x[1]['avg_return'],
-                reverse=True
-            )[:5]
-
-            for symbol, perf in sorted_symbols:
-                lines.append(
-                    f"   • {symbol}: {perf['avg_return']:+.2f}% return, "
-                    f"{perf['win_rate']:.0f}% win rate ({perf['evaluated']} signals)"
-                )
         else:
             lines.append("   • No signals evaluated yet (need 7+ days)")
 
