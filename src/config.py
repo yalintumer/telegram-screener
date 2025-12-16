@@ -93,7 +93,7 @@ class Config(BaseModel):
         except Exception as e:
             raise ConfigError(f"Failed to parse YAML: {e}")
 
-        # Environment variable overrides
+        # Environment variable overrides for sensitive data
         if bot := os.getenv("TELEGRAM_BOT_TOKEN"):
             raw.setdefault("telegram", {})["bot_token"] = bot
         if chat := os.getenv("TELEGRAM_CHAT_ID"):
@@ -102,6 +102,14 @@ class Config(BaseModel):
             raw.setdefault("api", {})["token"] = token
         if provider := os.getenv("API_PROVIDER"):
             raw.setdefault("api", {})["provider"] = provider
+        if notion_token := os.getenv("NOTION_API_TOKEN"):
+            raw.setdefault("notion", {})["api_token"] = notion_token
+        if notion_signals_db := os.getenv("NOTION_SIGNALS_DATABASE_ID"):
+            raw.setdefault("notion", {})["signals_database_id"] = notion_signals_db
+        if notion_buy_db := os.getenv("NOTION_BUY_DATABASE_ID"):
+            raw.setdefault("notion", {})["buy_database_id"] = notion_buy_db
+        if alpha_vantage := os.getenv("ALPHA_VANTAGE_KEY"):
+            raw.setdefault("api", {})["alpha_vantage_key"] = alpha_vantage
 
         try:
             return cls(**raw)
