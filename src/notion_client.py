@@ -392,6 +392,187 @@ class NotionClient:
             print(f"   ❌ Failed to add to buy: {error_detail}")
             return False
     
+    def delete_from_signals(self, symbol: str) -> bool:
+        """
+        Delete a symbol from signals database by symbol name.
+        
+        Args:
+            symbol: Stock ticker symbol to delete
+            
+        Returns:
+            True if deleted successfully, False otherwise
+        """
+        if not self.signals_database_id:
+            logger.warning("notion.no_signals_db")
+            return False
+        
+        try:
+            # Get signals to find page_id
+            signals, symbol_to_page = self.get_signals()
+            
+            if symbol not in symbol_to_page:
+                logger.warning("notion.symbol_not_in_signals", symbol=symbol)
+                return False
+            
+            page_id = symbol_to_page[symbol]
+            result = self.delete_page(page_id)
+            
+            if result:
+                logger.info("notion.deleted_from_signals", symbol=symbol)
+            return result
+            
+        except Exception as e:
+            logger.error("notion.delete_from_signals_failed", symbol=symbol, error=str(e))
+            return False
+    
+    def delete_from_buy(self, symbol: str) -> bool:
+        """
+        Delete a symbol from buy database by symbol name.
+        
+        Args:
+            symbol: Stock ticker symbol to delete
+            
+        Returns:
+            True if deleted successfully, False otherwise
+        """
+        if not self.buy_database_id:
+            logger.warning("notion.no_buy_db")
+            return False
+        
+        try:
+            # Get buy symbols with page IDs
+            symbol_to_page = self._get_symbol_page_map(self.buy_database_id)
+            
+            if symbol not in symbol_to_page:
+                logger.warning("notion.symbol_not_in_buy", symbol=symbol)
+                return False
+            
+            page_id = symbol_to_page[symbol]
+            result = self.delete_page(page_id)
+            
+            if result:
+                logger.info("notion.deleted_from_buy", symbol=symbol)
+            return result
+            
+        except Exception as e:
+            logger.error("notion.delete_from_buy_failed", symbol=symbol, error=str(e))
+            return False
+    
+    def _get_symbol_page_map(self, database_id: str) -> Dict[str, str]:
+        """
+        Get symbol to page_id mapping from any database.
+        
+        Args:
+            database_id: The ID of the database to query
+            
+        Returns:
+            Dictionary mapping symbol names to page IDs
+        """
+        symbol_to_page = {}
+        
+        try:
+            url = f"{self.base_url}/databases/{database_id}/query"
+            response = requests.post(url, headers=self.headers, json={}, timeout=NOTION_TIMEOUT)
+            response.raise_for_status()
+            
+            data = response.json()
+            results = data.get("results", [])
+            
+            if not results:
+                return symbol_to_page
+            
+            # Detect title property
+            first_page_props = results[0].get("properties", {})
+            title_property = None
+            for prop_name, prop_data in first_page_props.items():
+                if prop_data.get("type") == "title":
+                    title_property = prop_name
+                    break
+            
+            if not title_property:
+                return symbol_to_page
+            
+            for page in results:
+                page_id = page["id"]
+                props = page.get("properties", {})
+                title_data = props.get(title_property, {})
+                title_content = title_data.get("title", [])
+                
+                if title_content and len(title_content) > 0:
+                    symbol = title_content[0].get("text", {}).get("content", "").strip()
+                    if symbol:
+                        symbol_to_page[symbol] = page_id
+            
+            return symbol_to_page
+            
+        except Exception as e:
+            logger.error("notion.get_symbol_page_map_failed", database_id=database_id, error=str(e))
+            return symbol_to_page
+
+    def remove_duplicates_from_signals(self) -> int:
+        """
+        Remove duplicate symbols from signals database, keeping only the first occurrence.
+        
+        Returns:
+            Number of duplicates removed
+        """
+        if not self.signals_database_id:
+            return 0
+        
+        try:
+            url = f"{self.base_url}/databases/{self.signals_database_id}/query"
+            response = requests.post(url, headers=self.headers, json={}, timeout=NOTION_TIMEOUT)
+            response.raise_for_status()
+            
+            data = response.json()
+            results = data.get("results", [])
+            
+            if not results:
+                return 0
+            
+            # Detect title property
+            first_page_props = results[0].get("properties", {})
+            title_property = None
+            for prop_name, prop_data in first_page_props.items():
+                if prop_data.get("type") == "title":
+                    title_property = prop_name
+                    break
+            
+            if not title_property:
+                return 0
+            
+            # Track symbols and find duplicates
+            seen_symbols = set()
+            duplicate_pages = []
+            
+            for page in results:
+                page_id = page["id"]
+                props = page.get("properties", {})
+                title_data = props.get(title_property, {})
+                title_content = title_data.get("title", [])
+                
+                if title_content and len(title_content) > 0:
+                    symbol = title_content[0].get("text", {}).get("content", "").strip()
+                    if symbol:
+                        if symbol in seen_symbols:
+                            duplicate_pages.append((symbol, page_id))
+                        else:
+                            seen_symbols.add(symbol)
+            
+            # Delete duplicates
+            removed = 0
+            for symbol, page_id in duplicate_pages:
+                if self.delete_page(page_id):
+                    logger.info("notion.duplicate_removed", symbol=symbol, page_id=page_id)
+                    removed += 1
+            
+            logger.info("notion.duplicates_cleanup_complete", removed=removed, total_checked=len(results))
+            return removed
+            
+        except Exception as e:
+            logger.error("notion.remove_duplicates_failed", error=str(e))
+            return 0
+
     def delete_page(self, page_id: str) -> bool:
         """
         Archive (delete) a page from Notion
