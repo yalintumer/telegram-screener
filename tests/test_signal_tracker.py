@@ -472,3 +472,63 @@ class TestEdgeCases:
 
         assert "BRK.B" in tracker.data["symbol_cooldown"]
         assert tracker.data["signal_history"][0]["symbol"] == "BRK.B"
+
+
+class TestGetAllStatsAlias:
+    """Tests for get_all_stats backwards compatibility alias."""
+
+    def test_get_all_stats_returns_same_as_get_signal_stats_none(self, tmp_path):
+        """get_all_stats() should return identical result to get_signal_stats(None)."""
+        data_file = tmp_path / "signals.json"
+        tracker = SignalTracker(data_file=str(data_file))
+
+        # Add some test signals
+        tracker.record_alert("AAPL", {"price": 150.0})
+        tracker.record_alert("GOOGL", {"price": 2800.0})
+
+        all_stats = tracker.get_all_stats()
+        signal_stats = tracker.get_signal_stats(symbol=None)
+
+        assert all_stats == signal_stats
+
+    def test_get_all_stats_with_performance_data(self, tmp_path):
+        """get_all_stats() should include performance metrics when available."""
+        data_file = tmp_path / "signals.json"
+        tracker = SignalTracker(data_file=str(data_file))
+
+        # Add signal with performance data
+        tracker.data["signal_history"] = [
+            {
+                "symbol": "AAPL",
+                "date": "2024-12-10T10:00:00",
+                "signal_data": {"price": 150.0},
+                "performance": {"return_pct": 5.2, "days_after": 5, "price_at_signal": 150.0}
+            },
+            {
+                "symbol": "GOOGL",
+                "date": "2024-12-10T10:00:00",
+                "signal_data": {"price": 2800.0},
+                "performance": {"return_pct": -2.1, "days_after": 5, "price_at_signal": 2800.0}
+            }
+        ]
+
+        stats = tracker.get_all_stats()
+
+        assert stats["total_signals"] == 2
+        assert stats["evaluated"] == 2
+        assert stats["pending"] == 0
+        assert stats["avg_return"] is not None
+        assert stats["win_rate"] is not None
+
+    def test_get_all_stats_empty_history(self, tmp_path):
+        """get_all_stats() should handle empty signal history."""
+        data_file = tmp_path / "signals.json"
+        tracker = SignalTracker(data_file=str(data_file))
+
+        stats = tracker.get_all_stats()
+
+        assert stats["total_signals"] == 0
+        assert stats["evaluated"] == 0
+        assert stats["pending"] == 0
+        assert stats["avg_return"] is None
+        assert stats["win_rate"] is None

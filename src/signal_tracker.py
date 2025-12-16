@@ -259,3 +259,15 @@ class SignalTracker:
             "best_return": max(returns) if returns else None,
             "worst_return": min(returns) if returns else None
         }
+
+    def get_all_stats(self) -> dict:
+        """
+        Get performance statistics for all signals.
+
+        This is a backwards-compatible alias for get_signal_stats(symbol=None).
+        Used by analytics.py for weekly report generation.
+
+        Returns:
+            Dictionary with aggregate performance metrics for all signals
+        """
+        return self.get_signal_stats(symbol=None)
