@@ -197,3 +197,38 @@ class NotionClient:
     def _get_symbols_from_database(self, database_id: str) -> list[str]:
         """Generic method to fetch symbols from any database."""
         return self._repo._get_symbols_from_database(database_id)
+
+    def _request(
+        self,
+        method: str,
+        url: str,
+        json: dict | None = None,
+        **kwargs,
+    ):
+        """
+        Legacy facade method for direct HTTP requests.
+
+        This method maintains backwards compatibility with code that
+        expects to make direct HTTP requests through NotionClient.
+
+        Args:
+            method: HTTP method (get, post, patch, delete)
+            url: Full URL (will extract endpoint from base_url)
+            json: Optional JSON payload
+            **kwargs: Additional arguments (ignored for compatibility)
+
+        Returns:
+            requests.Response object
+        """
+        # Extract endpoint from full URL
+        # e.g., "https://api.notion.com/v1/databases/xxx/query" -> "/databases/xxx/query"
+        endpoint = url.replace(self.base_url, "")
+        if not endpoint.startswith("/"):
+            endpoint = "/" + endpoint
+
+        # Delegate to HTTP client
+        return self._repo.http.request(
+            method=method.upper(),
+            endpoint=endpoint,
+            json=json,
+        )

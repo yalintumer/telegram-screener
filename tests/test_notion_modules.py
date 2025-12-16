@@ -423,3 +423,114 @@ class TestSignalDataModel:
 
         assert "Symbol" in props
         assert "RSI" not in props  # None value skipped
+
+
+class TestNotionClientLegacyFacade:
+    """Tests for NotionClient legacy facade methods (_request, base_url)."""
+
+    @responses.activate
+    def test_request_method_delegates_to_http_client(self):
+        """Test that _request delegates to NotionHTTPClient.request."""
+        from src.notion_client import NotionClient
+
+        # Mock successful response
+        responses.add(
+            responses.POST,
+            "https://api.notion.com/v1/databases/test_db/query",
+            json={"results": [], "has_more": False},
+            status=200,
+        )
+
+        # Create client
+        client = NotionClient(
+            api_token="test_token_12345",
+            signals_database_id="test_signals_db",
+            buy_database_id="test_buy_db",
+        )
+
+        # Call legacy _request method
+        url = f"{client.base_url}/databases/test_db/query"
+        response = client._request("post", url, json={})
+
+        # Verify response
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data
+        assert data["has_more"] is False
+
+    @responses.activate
+    def test_request_method_handles_pagination_payload(self):
+        """Test that _request correctly passes pagination cursor."""
+        from src.notion_client import NotionClient
+
+        # Mock response
+        responses.add(
+            responses.POST,
+            "https://api.notion.com/v1/databases/test_db/query",
+            json={"results": [{"id": "page1"}], "has_more": False},
+            status=200,
+        )
+
+        client = NotionClient(
+            api_token="test_token_12345",
+            signals_database_id="test_signals_db",
+            buy_database_id="test_buy_db",
+        )
+
+        # Call with pagination cursor
+        url = f"{client.base_url}/databases/test_db/query"
+        response = client._request("post", url, json={"start_cursor": "abc123"})
+
+        assert response.status_code == 200
+        # Verify request was made with correct payload
+        assert responses.calls[0].request.body is not None
+
+    def test_base_url_property_exists(self):
+        """Test that base_url property is accessible."""
+        from src.notion_client import NotionClient
+
+        client = NotionClient(
+            api_token="test_token_12345",
+            signals_database_id="test_signals_db",
+            buy_database_id="test_buy_db",
+        )
+
+        assert client.base_url == "https://api.notion.com/v1"
+
+    @responses.activate
+    def test_request_method_works_with_backup_pattern(self):
+        """Test _request works exactly as backup.py expects."""
+        from src.notion_client import NotionClient
+
+        # This test mimics exactly how backup.py uses _request
+        responses.add(
+            responses.POST,
+            "https://api.notion.com/v1/databases/signals_db/query",
+            json={
+                "results": [
+                    {"id": "page1", "properties": {}},
+                    {"id": "page2", "properties": {}},
+                ],
+                "has_more": False,
+                "next_cursor": None,
+            },
+            status=200,
+        )
+
+        client = NotionClient(
+            api_token="test_token_12345",
+            signals_database_id="signals_db",
+            buy_database_id="buy_db",
+        )
+
+        # Exactly how backup.py calls it
+        url = f"{client.base_url}/databases/signals_db/query"
+        payload = {}
+        response = client._request("post", url, json=payload)
+
+        # Exactly how backup.py checks response
+        assert response.status_code == 200
+        data = response.json()
+        assert "results" in data
+        assert len(data["results"]) == 2
+        assert data["has_more"] is False
