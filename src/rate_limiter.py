@@ -2,17 +2,17 @@
 Simple rate limiter for external API calls.
 Thread-safe, no external dependencies.
 """
-import time
 import threading
+import time
 from collections import defaultdict
-from typing import Optional
-from .logger import logger
+
 from .constants import (
-    YFINANCE_RATE_LIMIT,
+    ALPHA_VANTAGE_RATE_LIMIT,
     NOTION_RATE_LIMIT,
     TELEGRAM_RATE_LIMIT,
-    ALPHA_VANTAGE_RATE_LIMIT,
+    YFINANCE_RATE_LIMIT,
 )
+from .logger import logger
 
 
 class RateLimiter:
@@ -24,7 +24,7 @@ class RateLimiter:
         limiter.wait("yfinance")  # Blocks if rate limit exceeded
         # ... make API call
     """
-    
+
     # Default limits per service (requests per minute)
     DEFAULT_LIMITS = {
         "yfinance": YFINANCE_RATE_LIMIT,
@@ -32,12 +32,12 @@ class RateLimiter:
         "telegram": TELEGRAM_RATE_LIMIT,
         "alpha_vantage": ALPHA_VANTAGE_RATE_LIMIT,
     }
-    
-    def __init__(self, custom_limits: Optional[dict] = None):
+
+    def __init__(self, custom_limits: dict | None = None):
         self._limits = {**self.DEFAULT_LIMITS, **(custom_limits or {})}
         self._tokens = defaultdict(lambda: {"count": 0, "last_reset": time.time()})
         self._lock = threading.Lock()
-    
+
     def wait(self, service: str, cost: int = 1) -> float:
         """
         Wait if necessary to respect rate limit, then consume tokens.
@@ -51,17 +51,17 @@ class RateLimiter:
         """
         limit = self._limits.get(service, 60)
         window = 60.0  # 1 minute window
-        
+
         with self._lock:
             now = time.time()
             bucket = self._tokens[service]
-            
+
             # Reset bucket if window passed
             elapsed = now - bucket["last_reset"]
             if elapsed >= window:
                 bucket["count"] = 0
                 bucket["last_reset"] = now
-            
+
             # Check if we need to wait
             if bucket["count"] + cost > limit:
                 wait_time = window - elapsed
@@ -79,17 +79,17 @@ class RateLimiter:
                         time.sleep(wait_time)
                     finally:
                         self._lock.acquire()
-                    
+
                     # Reset after wait
                     bucket["count"] = 0
                     bucket["last_reset"] = time.time()
-                    
+
                     bucket["count"] += cost
                     return wait_time
-            
+
             bucket["count"] += cost
             return 0.0
-    
+
     def get_remaining(self, service: str) -> int:
         """Get remaining requests for a service in current window."""
         limit = self._limits.get(service, 60)
@@ -99,7 +99,7 @@ class RateLimiter:
             if elapsed >= 60:
                 return limit
             return max(0, limit - bucket["count"])
-    
+
     def get_stats(self) -> dict:
         """Get current rate limit stats for all services."""
         stats = {}
@@ -117,7 +117,7 @@ class RateLimiter:
 
 
 # Global singleton instance
-_rate_limiter: Optional[RateLimiter] = None
+_rate_limiter: RateLimiter | None = None
 
 
 def get_rate_limiter() -> RateLimiter:

@@ -1,9 +1,10 @@
 import os
 from pathlib import Path
+
 import yaml
-from pydantic import BaseModel, Field, field_validator, model_validator
-from typing import List, Optional
 from dotenv import load_dotenv
+from pydantic import BaseModel, Field, field_validator
+
 from .exceptions import ConfigError
 
 load_dotenv()
@@ -26,7 +27,7 @@ class APIConfig(BaseModel):
     token: str = Field(default="", description="API token (not needed for yfinance)")
     alpha_vantage_key: str = Field(default="", description="Alpha Vantage API key for precise indicators")
     rate_limit_per_minute: int = Field(default=5, ge=1, le=60)
-    
+
     @field_validator('provider')
     @classmethod
     def validate_provider(cls, v: str) -> str:
@@ -41,12 +42,12 @@ class DataConfig(BaseModel):
 
 
 class ScreenConfig(BaseModel):
-    region: List[int] = Field(..., min_length=4, max_length=4)
-    app_name: Optional[str] = Field(default=None, description="Application name to activate before capture")
+    region: list[int] = Field(..., min_length=4, max_length=4)
+    app_name: str | None = Field(default=None, description="Application name to activate before capture")
 
     @field_validator('region')
     @classmethod
-    def validate_region(cls, v: List[int]) -> List[int]:
+    def validate_region(cls, v: list[int]) -> list[int]:
         if any(x < 0 for x in v[:2]):
             raise ValueError('Left/top coordinates cannot be negative')
         if v[2] <= 0 or v[3] <= 0:
@@ -55,7 +56,7 @@ class ScreenConfig(BaseModel):
 
 
 class TesseractConfig(BaseModel):
-    path: Optional[str] = None
+    path: str | None = None
     lang: str = "eng"
     config_str: str = "--psm 6"
 
@@ -63,10 +64,10 @@ class TesseractConfig(BaseModel):
 class NotionConfig(BaseModel):
     """Notion API configuration - only signals_database_id and buy_database_id are required"""
     api_token: str = Field(..., description="Notion integration token")
-    database_id: Optional[str] = Field(default=None, description="DEPRECATED: Old watchlist database ID (no longer used)")
+    database_id: str | None = Field(default=None, description="DEPRECATED: Old watchlist database ID (no longer used)")
     signals_database_id: str = Field(..., description="Database ID for first-stage signals")
     buy_database_id: str = Field(..., description="Database ID for confirmed buy signals")
-    
+
     @field_validator('api_token', 'signals_database_id', 'buy_database_id')
     @classmethod
     def not_placeholder(cls, v: str) -> str:
@@ -87,7 +88,7 @@ class Config(BaseModel):
         p = Path(path)
         if not p.exists():
             raise ConfigError(f"Config file not found: {path}")
-        
+
         try:
             raw = yaml.safe_load(p.read_text()) or {}
         except Exception as e:

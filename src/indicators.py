@@ -1,7 +1,15 @@
 import pandas as pd
+
 from .constants import (
-    STOCH_RSI_PERIOD, STOCH_PERIOD, STOCH_K_SMOOTH, STOCH_D_SMOOTH, STOCH_OVERSOLD,
-    MFI_PERIOD, MFI_UPTREND_DAYS, SIGNAL_LOOKBACK_DAYS, WAVETREND_OVERSOLD
+    MFI_PERIOD,
+    MFI_UPTREND_DAYS,
+    SIGNAL_LOOKBACK_DAYS,
+    STOCH_D_SMOOTH,
+    STOCH_K_SMOOTH,
+    STOCH_OVERSOLD,
+    STOCH_PERIOD,
+    STOCH_RSI_PERIOD,
+    WAVETREND_OVERSOLD,
 )
 
 
@@ -14,10 +22,10 @@ def rsi(series: pd.Series, period: int = STOCH_RSI_PERIOD) -> pd.Series:
     delta = series.diff()
     gain = delta.clip(lower=0).rolling(period).mean()
     loss = (-delta.clip(upper=0)).rolling(period).mean()
-    
+
     # Prevent division by zero: replace 0 with tiny value
     loss = loss.replace(0, 1e-10)
-    
+
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
@@ -38,31 +46,25 @@ def mfi(df: pd.DataFrame, period: int = MFI_PERIOD) -> pd.Series:
     """
     # Typical Price = (High + Low + Close) / 3
     typical_price = (df['High'] + df['Low'] + df['Close']) / 3
-    
+
     # Money Flow = Typical Price * Volume
     money_flow = typical_price * df['Volume']
-    
-    # Positive/Negative Money Flow
-    positive_flow = pd.Series(0.0, index=df.index)
-    negative_flow = pd.Series(0.0, index=df.index)
-    
-    # If typical price increased, it's positive flow
-    for i in range(1, len(df)):
-        if typical_price.iloc[i] > typical_price.iloc[i-1]:
-            positive_flow.iloc[i] = money_flow.iloc[i]
-        elif typical_price.iloc[i] < typical_price.iloc[i-1]:
-            negative_flow.iloc[i] = money_flow.iloc[i]
-    
+
+    # Vectorized Positive/Negative Money Flow (no iloc loop)
+    price_diff = typical_price.diff()
+    positive_flow = money_flow.where(price_diff > 0, 0.0)
+    negative_flow = money_flow.where(price_diff < 0, 0.0)
+
     # Sum over period
     positive_mf = positive_flow.rolling(period).sum()
     negative_mf = negative_flow.rolling(period).sum()
-    
+
     # Money Flow Ratio
     mfr = positive_mf / negative_mf.replace(0, 1e-10)
-    
+
     # Money Flow Index
     mfi = 100 - (100 / (1 + mfr))
-    
+
     return mfi
 
 
@@ -83,27 +85,27 @@ def mfi_uptrend(mfi_series: pd.Series, days: int = MFI_UPTREND_DAYS) -> bool:
     """
     if len(mfi_series) < days + 1:
         return False
-    
+
     # P1 = today (most recent)
-    # P2 = yesterday  
+    # P2 = yesterday
     # P3 = 2 days ago
     p1 = mfi_series.iloc[-1]  # today
     p2 = mfi_series.iloc[-2]  # yesterday
     p3 = mfi_series.iloc[-3]  # 2 days ago
-    
+
     if pd.isna(p1) or pd.isna(p2) or pd.isna(p3):
         return False
-    
+
     # P3 must be greater than both P2 and P1
     # This shows MFI made a higher point 2 days ago and is coming down
     # Actually, let me re-read the request...
     # "P3 > P2 ve P3 > P1" means the oldest point (P3) is higher
     # But that would mean MFI is FALLING not rising
-    
+
     # I think the intent is: current trend is UP
     # Let's interpret as: P1 > P2 (today > yesterday) AND P1 > P3 (today > 2 days ago)
     # This means today's MFI is higher than both yesterday and 2 days ago
-    
+
     return p1 > p2 and p1 > p3
 
 
@@ -130,29 +132,29 @@ def wavetrend(df: pd.DataFrame, channel_length: int = 10, average_length: int = 
     """
     # ap = hlc3 (typical price)
     ap = (df['High'] + df['Low'] + df['Close']) / 3
-    
+
     # esa = EMA of ap with channel_length
     esa = ap.ewm(span=channel_length, adjust=False).mean()
-    
+
     # d = EMA of absolute deviation
     d = (ap - esa).abs().ewm(span=channel_length, adjust=False).mean()
-    
+
     # ci = (ap - esa) / (0.015 * d)
     ci = (ap - esa) / (0.015 * d)
-    
+
     # tci = EMA of ci with average_length
     tci = ci.ewm(span=average_length, adjust=False).mean()
-    
+
     # wt1 = tci
     wt1 = tci
-    
+
     # wt2 = SMA of wt1 with period 4
     wt2 = wt1.rolling(4).mean()
-    
+
     return pd.DataFrame({"wt1": wt1, "wt2": wt2})
 
 
-def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS, 
+def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS,
                   oversold_level: int = WAVETREND_OVERSOLD) -> bool:
     """
     Detect WaveTrend buy signal (bullish cross in oversold zone)
@@ -172,36 +174,36 @@ def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS
     min_required = lookback_days + 1
     if len(wt_df) < min_required:
         return False
-    
+
     # Check last N days for bullish cross
     for i in range(1, lookback_days + 1):
         idx = -i
         prev_idx = idx - 1
-        
+
         if abs(prev_idx) > len(wt_df):
             break
-        
+
         prev = wt_df.iloc[prev_idx]
         curr = wt_df.iloc[idx]
-        
+
         # NaN check
         if pd.isna(prev.wt1) or pd.isna(prev.wt2) or pd.isna(curr.wt1) or pd.isna(curr.wt2):
             continue
-        
+
         # Cross up: wt1 crosses above wt2
         cross_up = prev.wt1 <= prev.wt2 and curr.wt1 > curr.wt2
-        
+
         # Oversold: Either wave below oversold level
         oversold = (curr.wt1 < oversold_level or curr.wt2 < oversold_level or
                    prev.wt1 < oversold_level or prev.wt2 < oversold_level)
-        
+
         if cross_up and oversold:
             return True
-    
+
     return False
 
 
-def stochastic_rsi(close: pd.Series, rsi_period=STOCH_RSI_PERIOD, stoch_period=STOCH_PERIOD, 
+def stochastic_rsi(close: pd.Series, rsi_period=STOCH_RSI_PERIOD, stoch_period=STOCH_PERIOD,
                    k=STOCH_K_SMOOTH, d=STOCH_D_SMOOTH) -> pd.DataFrame:
     r = rsi(close, rsi_period)
     r_min = r.rolling(stoch_period).min()
@@ -232,36 +234,36 @@ def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS) -
     min_required = lookback_days + 2
     if len(df) < min_required:
         return False
-    
+
     # Check last N days for a bullish cross
     for i in range(1, lookback_days + 1):
         idx = -i
         prev_idx = idx - 1
-        
+
         # Boundary check
         if abs(prev_idx) > len(df):
             break
-        
+
         prev = df.iloc[prev_idx]
         curr = df.iloc[idx]
-        
+
         # NaN check
         if any(pd.isna(v) for v in [prev.k, prev.d, curr.k, curr.d]):
             continue
-        
+
         # Cross up: K crosses above D
         cross_up = prev.k <= prev.d and curr.k > curr.d
-        
+
         # Oversold: Either line is below 20 during the cross
-        oversold = (curr.k < STOCH_OVERSOLD or curr.d < STOCH_OVERSOLD or 
+        oversold = (curr.k < STOCH_OVERSOLD or curr.d < STOCH_OVERSOLD or
                    prev.k < STOCH_OVERSOLD or prev.d < STOCH_OVERSOLD)
-        
+
         # Valid signal requires: cross + oversold (simplified)
         valid_cross = cross_up and oversold
-        
+
         if valid_cross:
             return True
-    
+
     return False
 
 
@@ -290,14 +292,14 @@ def bollinger_bands(data: pd.Series, period: int = 20, std_dev: float = 2.0) -> 
     """
     # Middle band = SMA
     middle = data.rolling(window=period).mean()
-    
+
     # Standard deviation
     std = data.rolling(window=period).std()
-    
+
     # Upper and lower bands
     upper = middle + (std * std_dev)
     lower = middle - (std * std_dev)
-    
+
     return {
         'upper': upper,
         'middle': middle,

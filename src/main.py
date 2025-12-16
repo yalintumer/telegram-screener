@@ -8,11 +8,11 @@ Most functionality has been extracted to:
 """
 
 import os
+
 import sentry_sdk
 from sentry_sdk.integrations.logging import LoggingIntegration
 
 from .logger import logger
-
 
 # =============================================================================
 # Sentry Initialization (Error Tracking)
@@ -41,17 +41,14 @@ if SENTRY_DSN:
 # =============================================================================
 # Re-exports from scanner.py (for backwards compatibility)
 # =============================================================================
-from .scanner import (
-    run_market_scan,
-    run_wavetrend_scan,
-    run_continuous,
-    update_signal_performance,
-)
-
 # Re-exports from filters.py
 from .filters import (
-    check_market_filter,
     check_wavetrend_signal,
+)
+from .scanner import (
+    run_continuous,
+    run_market_scan,
+    run_wavetrend_scan,
 )
 
 # Alias for backwards compatibility
@@ -68,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     Delegates to cli.py for argument parsing and dispatch.
     """
     from .cli import run_cli
-    
+
     return run_cli(
         argv,
         market_scan_fn=run_market_scan,

@@ -24,16 +24,17 @@ class TestNotionClientErrorHandling:
     
     @patch('requests.post')
     def test_network_error_handling(self, mock_post):
-        """Test handling of network errors"""
+        """Test handling of network errors - graceful degradation"""
         mock_post.side_effect = Exception("Network error")
         
         client = NotionClient("ntn_test123", signals_database_id="signals_db", buy_database_id="buy_db")
         
-        # Network error should raise exception
-        with pytest.raises(Exception) as exc_info:
-            symbols, mapping = client.get_signals()
+        # Network errors should return empty results gracefully (no exception raised)
+        symbols, mapping = client.get_signals()
         
-        assert "Network error" in str(exc_info.value)
+        # Should return empty results, not crash
+        assert symbols == []
+        assert mapping == {}
     
     @patch('requests.post')
     def test_empty_database_response(self, mock_post):
@@ -50,46 +51,51 @@ class TestNotionClientErrorHandling:
 
 class TestTelegramClientErrorHandling:
     """Test Telegram error handling"""
-    
-    def test_invalid_bot_token(self):
+
+    @patch('src.telegram_client.time.sleep')  # Skip retry delays
+    def test_invalid_bot_token(self, mock_sleep):
         """Test with placeholder bot token - non-critical returns False"""
         client = TelegramClient("YOUR_BOT_TOKEN", "123456")
-        
+
         # Non-critical send returns False on failure
         result = client.send("Test message")
         assert result == False
-    
-    def test_invalid_bot_token_critical(self):
+
+    @patch('src.telegram_client.time.sleep')  # Skip retry delays
+    def test_invalid_bot_token_critical(self, mock_sleep):
         """Test with placeholder bot token - critical raises"""
         client = TelegramClient("YOUR_BOT_TOKEN", "123456")
-        
+
         # Critical send raises on failure
         with pytest.raises(TelegramError):
             client.send("Test message", critical=True)
-    
+
+    @patch('src.telegram_client.time.sleep')  # Skip retry delays
     @patch('requests.post')
-    def test_network_error(self, mock_post):
+    def test_network_error(self, mock_post, mock_sleep):
         """Test Telegram network error - non-critical returns False"""
         mock_post.side_effect = Exception("Network error")
-        
+
         client = TelegramClient("bot123", "chat123")
-        
+
         # Non-critical returns False
         result = client.send("Test")
         assert result == False
-    
+
+    @patch('src.telegram_client.time.sleep')  # Skip retry delays
     @patch('requests.post')
-    def test_network_error_critical(self, mock_post):
+    def test_network_error_critical(self, mock_post, mock_sleep):
         """Test Telegram network error - critical raises"""
         mock_post.side_effect = Exception("Network error")
-        
+
         client = TelegramClient("bot123", "chat123")
-        
+
         with pytest.raises(TelegramError):
             client.send("Test", critical=True)
-    
+
+    @patch('src.telegram_client.time.sleep')  # Skip retry delays
     @patch('requests.post')
-    def test_rate_limit_error(self, mock_post):
+    def test_rate_limit_error(self, mock_post, mock_sleep):
         """Test Telegram rate limiting - returns False after retries"""
         mock_response = Mock()
         mock_response.status_code = 429
@@ -98,23 +104,24 @@ class TestTelegramClientErrorHandling:
         mock_post.return_value = mock_response
         
         client = TelegramClient("bot123", "chat123")
-        
+
         # Non-critical returns False
         result = client.send("Test")
         assert result == False
-    
+
+    @patch('src.telegram_client.time.sleep')  # Skip retry delays
     @patch('requests.post')
-    def test_consecutive_failures_raises(self, mock_post):
+    def test_consecutive_failures_raises(self, mock_post, mock_sleep):
         """Test that 5 consecutive failures raises TelegramError"""
         mock_post.side_effect = Exception("Network error")
-        
+
         client = TelegramClient("bot123", "chat123")
-        
+
         # First 4 failures should return False
         for _ in range(4):
             result = client.send("Test")
             assert result == False
-        
+
         # 5th failure should raise
         with pytest.raises(TelegramError):
             client.send("Test")

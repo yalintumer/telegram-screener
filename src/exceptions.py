@@ -1,6 +1,6 @@
 """Custom exceptions for TV OCR Screener with enhanced error context"""
 
-from typing import Optional, Any, Dict
+from typing import Any
 
 
 class TVScreenerError(Exception):
@@ -11,14 +11,14 @@ class TVScreenerError(Exception):
         context: Additional context dictionary (e.g., symbol, operation)
         original_error: Original exception if wrapped
     """
-    
-    def __init__(self, message: str, context: Optional[Dict[str, Any]] = None, 
-                 original_error: Optional[Exception] = None):
+
+    def __init__(self, message: str, context: dict[str, Any] | None = None,
+                 original_error: Exception | None = None):
         self.message = message
         self.context = context or {}
         self.original_error = original_error
         super().__init__(self._format_message())
-    
+
     def _format_message(self) -> str:
         """Format error message with context"""
         msg = self.message

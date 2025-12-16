@@ -1,0 +1,246 @@
+{
+  "timestamp": "2025-12-16T22:50:38.500168",
+  "symbols_profiled": 30,
+  "results": [
+    {
+      "symbol": "A",
+      "fetch_time": 0.7261047500069253,
+      "indicator_time": 0.009715499996673316,
+      "total_time": 0.7358249170065392,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AME",
+      "fetch_time": 0.418825625005411,
+      "indicator_time": 0.008986958011519164,
+      "total_time": 0.42781754201860167,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ALGN",
+      "fetch_time": 0.3370240000076592,
+      "indicator_time": 0.011594042007345706,
+      "total_time": 0.3486231660062913,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ALB",
+      "fetch_time": 0.28706983299343847,
+      "indicator_time": 0.012219541997183114,
+      "total_time": 0.29929575001006015,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AAPL",
+      "fetch_time": 0.27294037499814294,
+      "indicator_time": 0.009132000006502494,
+      "total_time": 0.28210354200564325,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ADP",
+      "fetch_time": 0.25703300000168383,
+      "indicator_time": 0.009058958006789908,
+      "total_time": 0.26609895800356753,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AJG",
+      "fetch_time": 0.25570770900230855,
+      "indicator_time": 0.008064333989750594,
+      "total_time": 0.26377695801784284,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AFL",
+      "fetch_time": 0.2305438749899622,
+      "indicator_time": 0.00905570900067687,
+      "total_time": 0.23960520801483653,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ABT",
+      "fetch_time": 0.2287410830031149,
+      "indicator_time": 0.006535166990943253,
+      "total_time": 0.23527966599795036,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ABBV",
+      "fetch_time": 0.21204758298699744,
+      "indicator_time": 0.009455374995013699,
+      "total_time": 0.2215062500035856,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AEP",
+      "fetch_time": 0.21226054200087674,
+      "indicator_time": 0.005829834000905976,
+      "total_time": 0.21809387498069555,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ADI",
+      "fetch_time": 0.20703874999890104,
+      "indicator_time": 0.009222291992045939,
+      "total_time": 0.21626712501165457,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AMAT",
+      "fetch_time": 0.20281479199184105,
+      "indicator_time": 0.011479374981718138,
+      "total_time": 0.21429962498950772,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ACN",
+      "fetch_time": 0.20594962500035763,
+      "indicator_time": 0.007283582992386073,
+      "total_time": 0.21323712498997338,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AIG",
+      "fetch_time": 0.19049054200877436,
+      "indicator_time": 0.010544417018536478,
+      "total_time": 0.20104416602407582,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ACGL",
+      "fetch_time": 0.1821620420087129,
+      "indicator_time": 0.009050333988852799,
+      "total_time": 0.1912169580173213,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ADM",
+      "fetch_time": 0.17888066702289507,
+      "indicator_time": 0.008238957991125062,
+      "total_time": 0.18712429198785685,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AEE",
+      "fetch_time": 0.1753091250138823,
+      "indicator_time": 0.006060749990865588,
+      "total_time": 0.1813740830111783,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AMCR",
+      "fetch_time": 0.1691141249903012,
+      "indicator_time": 0.011768875003326684,
+      "total_time": 0.18090837501222268,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AES",
+      "fetch_time": 0.17051699999137782,
+      "indicator_time": 0.007040374999633059,
+      "total_time": 0.17756049998570234,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ALL",
+      "fetch_time": 0.1670496659935452,
+      "indicator_time": 0.007913500012364239,
+      "total_time": 0.1749680420034565,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ALLE",
+      "fetch_time": 0.16029312499449588,
+      "indicator_time": 0.009784791996935382,
+      "total_time": 0.1700839170080144,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AAL",
+      "fetch_time": 0.15937545799533837,
+      "indicator_time": 0.00803887500660494,
+      "total_time": 0.16741783398902044,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AMGN",
+      "fetch_time": 0.1554302090080455,
+      "indicator_time": 0.008916541002690792,
+      "total_time": 0.1643522919912357,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AKAM",
+      "fetch_time": 0.1449285420239903,
+      "indicator_time": 0.011576999997487292,
+      "total_time": 0.1565119579900056,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ADSK",
+      "fetch_time": 0.1382632500026375,
+      "indicator_time": 0.011376249982276931,
+      "total_time": 0.14965562499128282,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ADBE",
+      "fetch_time": 0.135380833002273,
+      "indicator_time": 0.007242833991767839,
+      "total_time": 0.14265495899599046,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AIZ",
+      "fetch_time": 0.1324511670100037,
+      "indicator_time": 0.004413125017890707,
+      "total_time": 0.13686679198872298,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "AMD",
+      "fetch_time": 0.11819904099684209,
+      "indicator_time": 0.007520625018514693,
+      "total_time": 0.12572504198760726,
+      "success": true,
+      "error": null
+    },
+    {
+      "symbol": "ABNB",
+      "fetch_time": 0.11237575000268407,
+      "indicator_time": 0.005665917007718235,
+      "total_time": 0.11804779199883342,
+      "success": true,
+      "error": null
+    }
+  ]
+}

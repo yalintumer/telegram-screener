@@ -2,17 +2,18 @@
 Retry utilities with exponential backoff.
 Simple, no external dependencies.
 """
-import time
 import random
+import time
+from collections.abc import Callable
 from functools import wraps
-from typing import Callable, Tuple, Type, Optional
+
+from .constants import DEFAULT_RETRY_DELAY, MAX_RETRY_ATTEMPTS, MAX_RETRY_DELAY
 from .logger import logger
-from .constants import MAX_RETRY_ATTEMPTS, DEFAULT_RETRY_DELAY, MAX_RETRY_DELAY
 
 
 class RetryError(Exception):
     """Raised when all retry attempts fail."""
-    def __init__(self, message: str, last_exception: Optional[Exception] = None):
+    def __init__(self, message: str, last_exception: Exception | None = None):
         super().__init__(message)
         self.last_exception = last_exception
 
@@ -23,8 +24,8 @@ def retry_with_backoff(
     max_delay: float = MAX_RETRY_DELAY,
     exponential_base: float = 2.0,
     jitter: bool = True,
-    retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,),
-    on_retry: Optional[Callable[[int, Exception, float], None]] = None
+    retryable_exceptions: tuple[type[Exception], ...] = (Exception,),
+    on_retry: Callable[[int, Exception, float], None] | None = None
 ):
     """
     Decorator for retry with exponential backoff.
@@ -47,13 +48,13 @@ def retry_with_backoff(
         @wraps(func)
         def wrapper(*args, **kwargs):
             last_exception = None
-            
+
             for attempt in range(1, max_attempts + 1):
                 try:
                     return func(*args, **kwargs)
                 except retryable_exceptions as e:
                     last_exception = e
-                    
+
                     if attempt == max_attempts:
                         logger.error(
                             "retry.exhausted",
@@ -65,14 +66,14 @@ def retry_with_backoff(
                             f"{func.__name__} failed after {max_attempts} attempts: {e}",
                             last_exception=e
                         )
-                    
+
                     # Calculate delay with exponential backoff
                     delay = min(base_delay * (exponential_base ** (attempt - 1)), max_delay)
-                    
+
                     # Add jitter (±25%)
                     if jitter:
                         delay = delay * (0.75 + random.random() * 0.5)
-                    
+
                     logger.warning(
                         "retry.attempting",
                         function=func.__name__,
@@ -81,15 +82,15 @@ def retry_with_backoff(
                         delay=round(delay, 2),
                         error=str(e)[:50]
                     )
-                    
+
                     if on_retry:
                         on_retry(attempt, e, delay)
-                    
+
                     time.sleep(delay)
-            
+
             # Should never reach here, but just in case
             raise RetryError(f"{func.__name__} failed", last_exception=last_exception)
-        
+
         return wrapper
     return decorator
 

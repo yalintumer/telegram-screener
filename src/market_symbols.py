@@ -4,13 +4,13 @@ Market scanner için kullanılır.
 """
 
 import logging
-from typing import List
+
 from .constants import MARKET_CAP_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
 
-def get_sp500_symbols() -> List[str]:
+def get_sp500_symbols() -> list[str]:
     """
     S&P 500 endeksindeki hisse sembollerini döndürür.
     
@@ -75,7 +75,7 @@ def get_sp500_symbols() -> List[str]:
         "WMB", "WMT", "WRB", "WRK", "WST", "WTW", "WY", "WYNN", "XEL", "XOM",
         "XYL", "YUM", "ZBH", "ZBRA", "ZTS"
     ]
-    
+
     logger.info(f"S&P 500 listesi yüklendi: {len(symbols)} sembol")
     return symbols
 
