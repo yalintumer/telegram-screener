@@ -12,14 +12,14 @@ from .logger import logger
 class NotionBackup:
     """
     Backup Notion databases to local JSON files.
-    
+
     Works with our custom NotionClient (not the official SDK).
     """
 
     def __init__(self, backup_dir: str = "backups"):
         """
         Initialize backup system
-        
+
         Args:
             backup_dir: Directory to store backups
         """
@@ -45,12 +45,12 @@ class NotionBackup:
     def backup_database(self, notion_client, database_id: str, database_name: str) -> str | None:
         """
         Backup a Notion database to JSON file using our NotionClient.
-        
+
         Args:
             notion_client: Our NotionClient instance (not official SDK)
             database_id: Notion database ID
             database_name: Human-readable name for the database
-            
+
         Returns:
             Path to backup file, or None if failed
         """
@@ -103,15 +103,14 @@ class NotionBackup:
     def _query_all_pages(self, notion_client, database_id: str) -> list[dict] | None:
         """
         Query all pages from a Notion database using pagination.
-        
+
         Args:
             notion_client: Our NotionClient instance
             database_id: Notion database ID
-            
+
         Returns:
             List of all pages, or None if failed
         """
-
         results = []
         has_more = True
         start_cursor = None
@@ -151,11 +150,11 @@ class NotionBackup:
     def backup_all(self, notion_client, databases: dict[str, str]) -> list[str]:
         """
         Backup multiple databases
-        
+
         Args:
             notion_client: NotionClient instance
             databases: Dictionary of {name: database_id}
-            
+
         Returns:
             List of successful backup file paths
         """
@@ -183,10 +182,10 @@ class NotionBackup:
     def cleanup_old_backups(self, days: int = 30) -> int:
         """
         Remove backup files older than specified days
-        
+
         Args:
             days: Keep backups newer than this many days
-            
+
         Returns:
             Number of files deleted
         """
@@ -211,10 +210,10 @@ class NotionBackup:
     def restore_database(self, backup_file: str) -> dict:
         """
         Load backup file and return data
-        
+
         Args:
             backup_file: Path to backup file
-            
+
         Returns:
             Backup data dictionary
         """
@@ -235,10 +234,10 @@ class NotionBackup:
     def get_latest_backup(self, database_name: str) -> str | None:
         """
         Get the most recent backup file for a database
-        
+
         Args:
             database_name: Name of the database
-            
+
         Returns:
             Path to latest backup file, or None if not found
         """
@@ -252,7 +251,7 @@ class NotionBackup:
     def get_backup_stats(self) -> dict:
         """
         Get statistics about stored backups
-        
+
         Returns:
             Dictionary with backup statistics
         """

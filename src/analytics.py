@@ -89,7 +89,7 @@ class Analytics:
     def get_weekly_stats(self) -> dict:
         """
         Get statistics for the past 7 days
-        
+
         Returns:
             Dictionary with weekly analytics
         """
@@ -136,16 +136,16 @@ class Analytics:
             "alerts_sent": total_alerts,
             "avg_stage1_pass_rate": avg_stage1_pass_rate,
             "avg_stage2_confirm_rate": avg_stage2_confirm_rate,
-            "alert_symbols": list(set(a["symbol"] for a in alerts))
+            "alert_symbols": list({a["symbol"] for a in alerts})
         }
 
     def generate_weekly_report(self, signal_tracker: SignalTracker) -> str:
         """
         Generate comprehensive weekly report
-        
+
         Args:
             signal_tracker: SignalTracker instance for signal performance data
-            
+
         Returns:
             Formatted report string
         """
