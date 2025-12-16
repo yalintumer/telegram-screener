@@ -52,34 +52,70 @@ class TestTelegramClientErrorHandling:
     """Test Telegram error handling"""
     
     def test_invalid_bot_token(self):
-        """Test with placeholder bot token"""
-        # Should create client but fail on send
+        """Test with placeholder bot token - non-critical returns False"""
         client = TelegramClient("YOUR_BOT_TOKEN", "123456")
         
-        # Send should raise error
+        # Non-critical send returns False on failure
+        result = client.send("Test message")
+        assert result == False
+    
+    def test_invalid_bot_token_critical(self):
+        """Test with placeholder bot token - critical raises"""
+        client = TelegramClient("YOUR_BOT_TOKEN", "123456")
+        
+        # Critical send raises on failure
         with pytest.raises(TelegramError):
-            client.send("Test message")
+            client.send("Test message", critical=True)
     
     @patch('requests.post')
     def test_network_error(self, mock_post):
-        """Test Telegram network error"""
+        """Test Telegram network error - non-critical returns False"""
+        mock_post.side_effect = Exception("Network error")
+        
+        client = TelegramClient("bot123", "chat123")
+        
+        # Non-critical returns False
+        result = client.send("Test")
+        assert result == False
+    
+    @patch('requests.post')
+    def test_network_error_critical(self, mock_post):
+        """Test Telegram network error - critical raises"""
         mock_post.side_effect = Exception("Network error")
         
         client = TelegramClient("bot123", "chat123")
         
         with pytest.raises(TelegramError):
-            client.send("Test")
+            client.send("Test", critical=True)
     
     @patch('requests.post')
     def test_rate_limit_error(self, mock_post):
-        """Test Telegram rate limiting"""
+        """Test Telegram rate limiting - returns False after retries"""
         mock_response = Mock()
         mock_response.status_code = 429
-        mock_response.json.return_value = {"description": "Too Many Requests"}
+        mock_response.headers = {'Retry-After': '1'}
+        mock_response.raise_for_status.side_effect = Exception("Rate limited")
         mock_post.return_value = mock_response
         
         client = TelegramClient("bot123", "chat123")
         
+        # Non-critical returns False
+        result = client.send("Test")
+        assert result == False
+    
+    @patch('requests.post')
+    def test_consecutive_failures_raises(self, mock_post):
+        """Test that 5 consecutive failures raises TelegramError"""
+        mock_post.side_effect = Exception("Network error")
+        
+        client = TelegramClient("bot123", "chat123")
+        
+        # First 4 failures should return False
+        for _ in range(4):
+            result = client.send("Test")
+            assert result == False
+        
+        # 5th failure should raise
         with pytest.raises(TelegramError):
             client.send("Test")
 

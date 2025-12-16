@@ -46,7 +46,7 @@ class NotionClient:
     
     def _request(self, method: str, url: str, **kwargs) -> requests.Response:
         """
-        Make HTTP request with timeout and rate limiting.
+        Make HTTP request with timeout, rate limiting, and retry.
         
         Args:
             method: HTTP method (get, post, patch, delete)
@@ -55,13 +55,62 @@ class NotionClient:
             
         Returns:
             Response object
+            
+        Raises:
+            requests.RequestException: After all retries exhausted
         """
+        from .retry import is_retryable_http_status
+        
         # Rate limit Notion API calls
         rate_limit("notion")
         
         kwargs.setdefault('timeout', NOTION_TIMEOUT)
         kwargs.setdefault('headers', self.headers)
-        return getattr(requests, method)(url, **kwargs)
+        
+        max_attempts = 3
+        base_delay = 1.0
+        
+        last_exception = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                response = getattr(requests, method)(url, **kwargs)
+                
+                # Check if retryable error
+                if is_retryable_http_status(response.status_code):
+                    if attempt < max_attempts:
+                        delay = base_delay * (2 ** (attempt - 1))
+                        logger.warning(
+                            "notion.retry",
+                            status=response.status_code,
+                            attempt=attempt,
+                            delay=delay
+                        )
+                        import time
+                        time.sleep(delay)
+                        continue
+                
+                return response
+                
+            except requests.RequestException as e:
+                last_exception = e
+                if attempt < max_attempts:
+                    delay = base_delay * (2 ** (attempt - 1))
+                    logger.warning(
+                        "notion.retry_network",
+                        attempt=attempt,
+                        delay=delay,
+                        error=str(e)[:50]
+                    )
+                    import time
+                    time.sleep(delay)
+                else:
+                    logger.error("notion.request_failed", attempts=max_attempts, error=str(e))
+                    raise
+        
+        # Return last response or raise last exception
+        if last_exception:
+            raise last_exception
+        return response
     
     def _get_database_schema(self, database_id: str) -> Optional[dict]:
         """

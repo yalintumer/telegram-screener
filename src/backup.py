@@ -3,14 +3,19 @@ Database backup system for Notion data
 Automatically exports and stores Notion database contents
 """
 import json
+import os
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict
+from typing import List, Dict, Optional
 from .logger import logger
 
 
 class NotionBackup:
-    """Backup Notion databases to local JSON files"""
+    """
+    Backup Notion databases to local JSON files.
+    
+    Works with our custom NotionClient (not the official SDK).
+    """
     
     def __init__(self, backup_dir: str = "backups"):
         """
@@ -20,64 +25,130 @@ class NotionBackup:
             backup_dir: Directory to store backups
         """
         self.backup_dir = Path(backup_dir)
-        self.backup_dir.mkdir(exist_ok=True)
+        self._ensure_backup_dir()
     
-    def backup_database(self, notion_client, database_id: str, database_name: str) -> str:
+    def _ensure_backup_dir(self):
+        """Create backup directory with proper permissions."""
+        try:
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
+            # Ensure we can write to it
+            test_file = self.backup_dir / ".write_test"
+            test_file.write_text("test")
+            test_file.unlink()
+            logger.info("backup.dir_ready", path=str(self.backup_dir))
+        except Exception as e:
+            logger.error("backup.dir_failed", path=str(self.backup_dir), error=str(e))
+            # Fallback to /tmp
+            self.backup_dir = Path("/tmp/telegram-screener-backups")
+            self.backup_dir.mkdir(parents=True, exist_ok=True)
+            logger.warning("backup.dir_fallback", path=str(self.backup_dir))
+    
+    def backup_database(self, notion_client, database_id: str, database_name: str) -> Optional[str]:
         """
-        Backup a Notion database to JSON file
+        Backup a Notion database to JSON file using our NotionClient.
         
         Args:
-            notion_client: NotionClient instance
+            notion_client: Our NotionClient instance (not official SDK)
             database_id: Notion database ID
             database_name: Human-readable name for the database
             
         Returns:
-            Path to backup file
+            Path to backup file, or None if failed
         """
+        if not database_id or database_id.startswith("LOADED_FROM"):
+            logger.warning("backup.skipped_invalid_id", database=database_name)
+            return None
+        
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"{database_name}_{timestamp}.json"
         filepath = self.backup_dir / filename
         
         try:
-            logger.info("backup_started", database=database_name, id=database_id)
+            logger.info("backup.started", database=database_name, id=database_id[:8])
             
-            # Query all pages from database
-            results = []
-            has_more = True
-            start_cursor = None
+            # Use our NotionClient's query method
+            results = self._query_all_pages(notion_client, database_id)
             
-            while has_more:
-                response = notion_client.client.databases.query(
-                    database_id=database_id,
-                    start_cursor=start_cursor
-                )
-                
-                results.extend(response.get("results", []))
-                has_more = response.get("has_more", False)
-                start_cursor = response.get("next_cursor")
+            if results is None:
+                logger.error("backup.query_failed", database=database_name)
+                return None
             
             # Save to file
             backup_data = {
                 "database_name": database_name,
                 "database_id": database_id,
                 "timestamp": timestamp,
+                "backed_up_at": datetime.now().isoformat(),
                 "page_count": len(results),
                 "pages": results
             }
             
-            with open(filepath, 'w') as f:
-                json.dump(backup_data, f, indent=2)
+            # Atomic write
+            temp_file = filepath.with_suffix('.tmp')
+            with open(temp_file, 'w', encoding='utf-8') as f:
+                json.dump(backup_data, f, indent=2, default=str)
+            temp_file.rename(filepath)
             
-            logger.info("backup_completed", 
+            logger.info("backup.completed", 
                        database=database_name,
                        pages=len(results),
-                       file=str(filepath))
+                       file=str(filepath),
+                       size_kb=filepath.stat().st_size // 1024)
             
             return str(filepath)
             
         except Exception as e:
-            logger.error("backup_failed", database=database_name, error=str(e))
-            raise
+            logger.error("backup.failed", database=database_name, error=str(e))
+            return None
+    
+    def _query_all_pages(self, notion_client, database_id: str) -> Optional[List[dict]]:
+        """
+        Query all pages from a Notion database using pagination.
+        
+        Args:
+            notion_client: Our NotionClient instance
+            database_id: Notion database ID
+            
+        Returns:
+            List of all pages, or None if failed
+        """
+        import requests
+        
+        results = []
+        has_more = True
+        start_cursor = None
+        
+        try:
+            while has_more:
+                url = f"{notion_client.base_url}/databases/{database_id}/query"
+                
+                payload = {}
+                if start_cursor:
+                    payload["start_cursor"] = start_cursor
+                
+                response = notion_client._request("post", url, json=payload)
+                
+                if response.status_code != 200:
+                    logger.error("backup.query_error", 
+                               status=response.status_code,
+                               error=response.text[:100])
+                    return None
+                
+                data = response.json()
+                results.extend(data.get("results", []))
+                has_more = data.get("has_more", False)
+                start_cursor = data.get("next_cursor")
+                
+                logger.debug("backup.page_fetched", 
+                           count=len(data.get("results", [])),
+                           total=len(results),
+                           has_more=has_more)
+            
+            return results
+            
+        except Exception as e:
+            logger.error("backup.pagination_error", error=str(e))
+            return None
     
     def backup_all(self, notion_client, databases: Dict[str, str]) -> List[str]:
         """
@@ -88,18 +159,26 @@ class NotionBackup:
             databases: Dictionary of {name: database_id}
             
         Returns:
-            List of backup file paths
+            List of successful backup file paths
         """
         backup_files = []
+        failed = []
         
         for name, db_id in databases.items():
-            if db_id:  # Only backup if database ID is configured
-                try:
-                    filepath = self.backup_database(notion_client, db_id, name)
+            if db_id and not db_id.startswith("LOADED_FROM"):
+                filepath = self.backup_database(notion_client, db_id, name)
+                if filepath:
                     backup_files.append(filepath)
                     print(f"   ✅ Backed up {name}: {filepath}")
-                except Exception as e:
-                    print(f"   ⚠️  Failed to backup {name}: {e}")
+                else:
+                    failed.append(name)
+                    print(f"   ⚠️  Failed to backup {name}")
+        
+        logger.info("backup.all_completed", 
+                   success=len(backup_files), 
+                   failed=len(failed))
+        
+        return backup_files
         
         return backup_files
     
