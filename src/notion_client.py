@@ -458,6 +458,35 @@ class NotionClient:
             logger.error("notion.delete_from_buy_failed", symbol=symbol, error=str(e))
             return False
     
+    def delete_from_watchlist(self, symbol: str) -> bool:
+        """
+        Delete a symbol from watchlist database by symbol name.
+        
+        Args:
+            symbol: Stock ticker symbol to delete
+            
+        Returns:
+            True if deleted successfully, False otherwise
+        """
+        try:
+            # Get watchlist to find page_id
+            symbols, symbol_to_page = self.get_watchlist()
+            
+            if symbol not in symbol_to_page:
+                logger.warning("notion.symbol_not_in_watchlist", symbol=symbol)
+                return False
+            
+            page_id = symbol_to_page[symbol]
+            result = self.delete_page(page_id)
+            
+            if result:
+                logger.info("notion.deleted_from_watchlist", symbol=symbol)
+            return result
+            
+        except Exception as e:
+            logger.error("notion.delete_from_watchlist_failed", symbol=symbol, error=str(e))
+            return False
+    
     def _get_symbol_page_map(self, database_id: str) -> Dict[str, str]:
         """
         Get symbol to page_id mapping from any database.
