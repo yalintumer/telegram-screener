@@ -1,16 +1,43 @@
 import logging
 import sys
+import threading
+import uuid
 from pathlib import Path
 from datetime import datetime
+from contextvars import ContextVar
+
+# Context variable for correlation ID (thread-safe)
+_correlation_id: ContextVar[str] = ContextVar('correlation_id', default='')
+
+
+def set_correlation_id(correlation_id: str = None) -> str:
+    """
+    Set correlation ID for current context. 
+    If not provided, generates a new one.
+    Returns the correlation ID.
+    """
+    cid = correlation_id or f"scan-{uuid.uuid4().hex[:8]}"
+    _correlation_id.set(cid)
+    return cid
+
+
+def get_correlation_id() -> str:
+    """Get current correlation ID."""
+    return _correlation_id.get()
 
 
 class StructuredLogger:
-    """Simple wrapper to support key-value logging"""
+    """Simple wrapper to support key-value logging with correlation ID"""
     
     def __init__(self, logger):
         self._logger = logger
     
     def _format_msg(self, msg, **kwargs):
+        # Add correlation ID if present
+        cid = get_correlation_id()
+        if cid:
+            kwargs['cid'] = cid
+        
         if kwargs:
             kv_str = " ".join(f"{k}={v}" for k, v in kwargs.items())
             return f"{msg} {kv_str}"

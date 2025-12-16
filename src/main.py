@@ -10,23 +10,38 @@ from .telegram_client import TelegramClient
 from .indicators import stochastic_rsi, stoch_rsi_buy, mfi, mfi_uptrend, wavetrend, wavetrend_buy, bollinger_bands
 from .data_source_yfinance import daily_ohlc, weekly_ohlc
 from .data_source_alpha_vantage import alpha_vantage_ohlc
-from .logger import logger
+from .logger import logger, set_correlation_id
 from .market_symbols import get_sp500_symbols, get_market_cap_threshold
 from .signal_tracker import SignalTracker
 from .cache import MarketCapCache
 from .analytics import Analytics
 from .backup import NotionBackup
+from .health import get_health
 import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 import yfinance as yf
 
-# Initialize Sentry for error tracking (DSN from environment)
+# Initialize Sentry for error tracking
 SENTRY_DSN = os.getenv('SENTRY_DSN', '')
+ENVIRONMENT = os.getenv('ENVIRONMENT', 'production')
+
 if SENTRY_DSN:
+    sentry_logging = LoggingIntegration(
+        level=None,           # Capture nothing from logging
+        event_level=None      # Send nothing as events (we'll capture manually)
+    )
     sentry_sdk.init(
         dsn=SENTRY_DSN,
-        traces_sample_rate=1.0,
-        send_default_pii=True,
+        environment=ENVIRONMENT,
+        release=f"telegram-screener@1.0.0",
+        traces_sample_rate=0.1,  # 10% of transactions
+        profiles_sample_rate=0.1,
+        send_default_pii=False,
+        integrations=[sentry_logging],
+        # Capture errors but not info/warning
+        before_send=lambda event, hint: event if event.get('level') in ('error', 'fatal') else None
     )
+    logger.info("sentry.initialized", environment=ENVIRONMENT)
 
 
 def update_signal_performance(signal_tracker: SignalTracker, lookback_days: int = 7) -> dict:
@@ -724,39 +739,67 @@ def run_continuous(cfg: Config, interval: int = 3600):
     
     cycle = 1
     last_market_scan_date = None  # Track when we last ran market scan
+    health = get_health()
     
     try:
         while True:
+            # Set correlation ID for this scan cycle
+            cid = set_correlation_id(f"cycle-{cycle}-{datetime.now().strftime('%H%M%S')}")
+            scan_start = time.time()
+            symbols_scanned = 0
+            signals_found = 0
+            
+            health.scan_started(cycle)
+            logger.info("scan_cycle_started", cycle=cycle)
+            
             print(f"{'='*60}")
-            print(f"📊 Scan Cycle {cycle}")
+            print(f"📊 Scan Cycle {cycle} [{cid}]")
             print(f"{'='*60}\n")
             
-            # Stage 1: Market Scanner (once per day)
-            # S&P 500 → filter + signal check → Signals DB
-            today = date.today()
-            if last_market_scan_date != today:
-                try:
-                    print("🔍 Stage 1: Daily Market Scanner (S&P 500 → Signals DB)...\n")
-                    run_market_scan(cfg)
-                    last_market_scan_date = today
-                    print()
-                except Exception as e:
-                    logger.error("stage1_market_scan_error", cycle=cycle, error=str(e))
-                    print(f"❌ Error in market scan: {e}\n")
-            else:
-                print("ℹ️  Stage 1: Market scan already done today, skipping...\n")
-            
-            # Stage 2: Signals → WaveTrend → Buy
             try:
-                print("🌊 Stage 2: Checking signals (WaveTrend → Buy DB)...\n")
-                run_wavetrend_scan(cfg)
+                # Stage 1: Market Scanner (once per day)
+                # S&P 500 → filter + signal check → Signals DB
+                today = date.today()
+                if last_market_scan_date != today:
+                    try:
+                        print("🔍 Stage 1: Daily Market Scanner (S&P 500 → Signals DB)...\n")
+                        result = run_market_scan(cfg)
+                        if result:
+                            symbols_scanned = result.get('symbols_checked', 0)
+                            signals_found += result.get('signals_found', 0)
+                        last_market_scan_date = today
+                        print()
+                    except Exception as e:
+                        logger.error("stage1_market_scan_error", cycle=cycle, error=str(e))
+                        print(f"❌ Error in market scan: {e}\n")
+                        sentry_sdk.capture_exception(e)
+                else:
+                    print("ℹ️  Stage 1: Market scan already done today, skipping...\n")
+                
+                # Stage 2: Signals → WaveTrend → Buy
+                try:
+                    print("🌊 Stage 2: Checking signals (WaveTrend → Buy DB)...\n")
+                    result = run_wavetrend_scan(cfg)
+                    if result:
+                        signals_found += result.get('confirmed', 0)
+                except Exception as e:
+                    logger.error("stage2_scan_error", cycle=cycle, error=str(e))
+                    print(f"❌ Error in stage 2: {e}")
+                    sentry_sdk.capture_exception(e)
+                
+                # Update health with success
+                scan_duration = time.time() - scan_start
+                health.scan_completed(symbols_scanned, signals_found, scan_duration)
+                
             except Exception as e:
-                logger.error("stage2_scan_error", cycle=cycle, error=str(e))
-                print(f"❌ Error in stage 2: {e}")
+                health.scan_failed(str(e))
+                logger.exception("scan_cycle_failed", cycle=cycle)
+                sentry_sdk.capture_exception(e)
             
             cycle += 1
             
             print(f"\n⏳ Waiting {interval}s until next scan...")
+            health.heartbeat()
             time.sleep(interval)
             
     except KeyboardInterrupt:
