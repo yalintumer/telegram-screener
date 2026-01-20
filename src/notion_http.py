@@ -3,6 +3,7 @@ Notion HTTP client with session pooling, retry logic, and rate limiting.
 
 This module handles all low-level HTTP communication with the Notion API.
 """
+
 import time
 from typing import Any
 
@@ -148,13 +149,9 @@ class NotionHTTPClient:
         # All retries exhausted
         if last_exception:
             raise last_exception
-        raise requests.exceptions.RequestException(
-            f"Request failed after {self.config.max_retries} retries"
-        )
+        raise requests.exceptions.RequestException(f"Request failed after {self.config.max_retries} retries")
 
-    def get(
-        self, endpoint: str, *, use_rate_limiter: bool = True
-    ) -> requests.Response:
+    def get(self, endpoint: str, *, use_rate_limiter: bool = True) -> requests.Response:
         """GET request shorthand."""
         return self.request("GET", endpoint, use_rate_limiter=use_rate_limiter)
 
@@ -198,9 +195,7 @@ class NotionHTTPClient:
             self._schema_cache[database_id] = properties
             return properties
         except Exception as e:
-            logger.error(
-                "notion.schema_fetch_failed", database_id=database_id, error=str(e)
-            )
+            logger.error("notion.schema_fetch_failed", database_id=database_id, error=str(e))
             return {}
 
     def find_title_property(self, properties: dict[str, Any]) -> str | None:

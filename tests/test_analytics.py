@@ -1,4 +1,5 @@
 """Tests for analytics module."""
+
 import json
 from datetime import datetime, timedelta
 from unittest.mock import Mock
@@ -19,7 +20,7 @@ class TestAnalyticsInit:
             "stage1_scans": [],
             "stage2_scans": [],
             "alerts_sent": [],
-            "last_report_date": None
+            "last_report_date": None,
         }
 
     def test_loads_existing_data_from_file(self, tmp_path):
@@ -30,7 +31,7 @@ class TestAnalyticsInit:
             "stage1_scans": [],
             "stage2_scans": [],
             "alerts_sent": [],
-            "last_report_date": "2024-01-01T00:00:00"
+            "last_report_date": "2024-01-01T00:00:00",
         }
         data_file.write_text(json.dumps(existing_data))
 
@@ -51,7 +52,7 @@ class TestAnalyticsInit:
             "stage1_scans": [],
             "stage2_scans": [],
             "alerts_sent": [],
-            "last_report_date": None
+            "last_report_date": None,
         }
 
     def test_handles_empty_json_file(self, tmp_path):
@@ -198,17 +199,11 @@ class TestGetWeeklyStats:
 
         # Add old data (10 days ago)
         old_timestamp = (datetime.now() - timedelta(days=10)).isoformat()
-        analytics.data["market_scans"].append({
-            "timestamp": old_timestamp,
-            "found": 100, "added": 5, "updated": 10
-        })
+        analytics.data["market_scans"].append({"timestamp": old_timestamp, "found": 100, "added": 5, "updated": 10})
 
         # Add recent data (2 days ago)
         recent_timestamp = (datetime.now() - timedelta(days=2)).isoformat()
-        analytics.data["market_scans"].append({
-            "timestamp": recent_timestamp,
-            "found": 200, "added": 10, "updated": 20
-        })
+        analytics.data["market_scans"].append({"timestamp": recent_timestamp, "found": 200, "added": 10, "updated": 20})
 
         stats = analytics.get_weekly_stats()
 
@@ -222,7 +217,7 @@ class TestGetWeeklyStats:
         recent = datetime.now().isoformat()
         analytics.data["stage1_scans"] = [
             {"timestamp": recent, "checked": 100, "passed": 20, "pass_rate": 20.0},
-            {"timestamp": recent, "checked": 100, "passed": 40, "pass_rate": 40.0}
+            {"timestamp": recent, "checked": 100, "passed": 40, "pass_rate": 40.0},
         ]
 
         stats = analytics.get_weekly_stats()
@@ -275,7 +270,7 @@ class TestGenerateWeeklyReport:
             "evaluated": 5,
             "pending": 3,
             "avg_return": 10.5,
-            "win_rate": 60
+            "win_rate": 60,
         }
 
         report = analytics.generate_weekly_report(mock_tracker)
@@ -295,7 +290,7 @@ class TestGenerateWeeklyReport:
             "evaluated": 5,
             "pending": 5,
             "avg_return": 15.5,
-            "win_rate": 80
+            "win_rate": 80,
         }
 
         report = analytics.generate_weekly_report(mock_tracker)
@@ -316,7 +311,7 @@ class TestGenerateWeeklyReport:
             "evaluated": 0,
             "pending": 5,
             "avg_return": None,
-            "win_rate": None
+            "win_rate": None,
         }
 
         report = analytics.generate_weekly_report(mock_tracker)

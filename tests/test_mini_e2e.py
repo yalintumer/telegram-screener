@@ -7,6 +7,7 @@ This test validates the complete signal flow:
 All external dependencies are mocked - no network calls.
 Each step is clearly labeled for easy debugging.
 """
+
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
@@ -24,7 +25,7 @@ from src.telegram_client import TelegramClient
 @pytest.fixture
 def mock_ohlc_data():
     """Generate mock OHLC data that will pass indicator filters."""
-    dates = pd.date_range(end=datetime.now(), periods=50, freq='D')
+    dates = pd.date_range(end=datetime.now(), periods=50, freq="D")
 
     # Create data that produces oversold RSI/Stoch signals
     # Price dropping then recovering = bullish reversal setup
@@ -33,14 +34,16 @@ def mock_ohlc_data():
 
     # Create DataFrame with Date as a column (not index)
     # This matches what daily_ohlc returns after reset_index()
-    df = pd.DataFrame({
-        'Date': dates,
-        'Open': prices,
-        'High': [p * 1.01 for p in prices],
-        'Low': [p * 0.99 for p in prices],
-        'Close': prices,
-        'Volume': [1000000] * 50,
-    })
+    df = pd.DataFrame(
+        {
+            "Date": dates,
+            "Open": prices,
+            "High": [p * 1.01 for p in prices],
+            "Low": [p * 0.99 for p in prices],
+            "Close": prices,
+            "Volume": [1000000] * 50,
+        }
+    )
 
     return df
 
@@ -48,20 +51,23 @@ def mock_ohlc_data():
 @pytest.fixture
 def mock_history_data():
     """Generate mock history data as returned by yfinance.Ticker.history()."""
-    dates = pd.date_range(end=datetime.now(), periods=50, freq='D')
+    dates = pd.date_range(end=datetime.now(), periods=50, freq="D")
 
     prices = [100 - i * 0.5 for i in range(40)]
     prices += [82 + i * 0.3 for i in range(10)]
 
     # yfinance returns DataFrame with DatetimeIndex named 'Date'
-    df = pd.DataFrame({
-        'Open': prices,
-        'High': [p * 1.01 for p in prices],
-        'Low': [p * 0.99 for p in prices],
-        'Close': prices,
-        'Volume': [1000000] * 50,
-    }, index=dates)
-    df.index.name = 'Date'
+    df = pd.DataFrame(
+        {
+            "Open": prices,
+            "High": [p * 1.01 for p in prices],
+            "Low": [p * 0.99 for p in prices],
+            "Close": prices,
+            "Volume": [1000000] * 50,
+        },
+        index=dates,
+    )
+    df.index.name = "Date"
 
     return df
 
@@ -115,19 +121,20 @@ class TestMiniE2ESignalFlow:
         # =====================================================================
         print("\n📊 STEP 1: Fetching OHLC data...")
 
-        with patch('src.data_source_yfinance.yf.Ticker') as mock_ticker:
+        with patch("src.data_source_yfinance.yf.Ticker") as mock_ticker:
             mock_instance = MagicMock()
             # Return data with DatetimeIndex that matches yfinance format
             mock_instance.history.return_value = mock_history_data
             mock_ticker.return_value = mock_instance
 
             from src.data_source_yfinance import daily_ohlc
+
             df = daily_ohlc(symbol, days=50)
 
         # Verify data fetched
         assert df is not None, "STEP 1 FAILED: No data returned from data source"
         assert len(df) >= 30, f"STEP 1 FAILED: Insufficient data rows ({len(df)})"
-        assert 'Close' in df.columns, "STEP 1 FAILED: Missing 'Close' column"
+        assert "Close" in df.columns, "STEP 1 FAILED: Missing 'Close' column"
         print(f"   ✅ Fetched {len(df)} rows of OHLC data")
 
         # =====================================================================
@@ -140,8 +147,8 @@ class TestMiniE2ESignalFlow:
         from src.indicators import rsi as calc_rsi
         from src.indicators import stochastic_rsi
 
-        rsi_series = calc_rsi(df['Close'], period=14)
-        stoch_df = stochastic_rsi(df['Close'], rsi_period=14, stoch_period=14)
+        rsi_series = calc_rsi(df["Close"], period=14)
+        stoch_df = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14)
         mfi_series = calc_mfi(df, period=14)
 
         # Verify indicators calculated
@@ -150,10 +157,10 @@ class TestMiniE2ESignalFlow:
         assert mfi_series is not None, "STEP 2 FAILED: MFI calculation returned None"
 
         latest_rsi = float(rsi_series.iloc[-1])
-        latest_k = float(stoch_df['k'].iloc[-1])
-        latest_d = float(stoch_df['d'].iloc[-1])
+        latest_k = float(stoch_df["k"].iloc[-1])
+        latest_d = float(stoch_df["d"].iloc[-1])
         latest_mfi = float(mfi_series.iloc[-1])
-        latest_price = float(df['Close'].iloc[-1])
+        latest_price = float(df["Close"].iloc[-1])
 
         print(f"   RSI: {latest_rsi:.2f}")
         print(f"   Stoch K: {latest_k:.2f}, D: {latest_d:.2f}")
@@ -248,12 +255,10 @@ class TestMiniE2ESignalFlow:
         assert daily_count == 1, f"STEP 4 FAILED: Daily count is {daily_count}, expected 1"
 
         # Verify symbol is now in cooldown
-        assert symbol in signal_tracker.data["symbol_cooldown"], \
-            "STEP 4 FAILED: Symbol not added to cooldown"
+        assert symbol in signal_tracker.data["symbol_cooldown"], "STEP 4 FAILED: Symbol not added to cooldown"
 
         # Verify signal history updated
-        assert len(signal_tracker.data["signal_history"]) == 1, \
-            "STEP 4 FAILED: Signal not added to history"
+        assert len(signal_tracker.data["signal_history"]) == 1, "STEP 4 FAILED: Signal not added to history"
 
         recorded_signal = signal_tracker.data["signal_history"][0]
         assert recorded_signal["symbol"] == symbol, "STEP 4 FAILED: Wrong symbol recorded"
@@ -289,7 +294,7 @@ class TestMiniE2ESignalFlow:
 • MFI: {latest_mfi:.1f}
 
 💰 Price: ${latest_price:.2f}
-📅 Date: {signal_data['date']}
+📅 Date: {signal_data["date"]}
 """
 
         send_success = telegram.send(message)
@@ -311,10 +316,8 @@ class TestMiniE2ESignalFlow:
         # Try to send another alert for same symbol
         can_send_again, cooldown_reason = signal_tracker.can_send_alert(symbol)
 
-        assert can_send_again is False, \
-            "STEP 6 FAILED: Same symbol should be blocked by cooldown"
-        assert "cooldown" in cooldown_reason.lower(), \
-            f"STEP 6 FAILED: Wrong rejection reason - {cooldown_reason}"
+        assert can_send_again is False, "STEP 6 FAILED: Same symbol should be blocked by cooldown"
+        assert "cooldown" in cooldown_reason.lower(), f"STEP 6 FAILED: Wrong rejection reason - {cooldown_reason}"
 
         print(f"   Duplicate blocked: {cooldown_reason}")
         print("   ✅ Idempotency verified")
@@ -389,8 +392,7 @@ class TestMiniE2EEdgeCases:
         signal_tracker.record_alert("TRACK_ME", {"price": 100.0})
 
         # Verify signal is tracked
-        assert len(signal_tracker.data["signal_history"]) == 1, \
-            "Signal should be tracked regardless of Telegram status"
+        assert len(signal_tracker.data["signal_history"]) == 1, "Signal should be tracked regardless of Telegram status"
 
         # Now try to send Telegram (will fail)
         telegram = TelegramClient(token="test_bot_token", chat_id="test_chat")
@@ -400,8 +402,9 @@ class TestMiniE2EEdgeCases:
         assert result is False, "Expected False when Telegram fails"
 
         # Signal should still be tracked
-        assert len(signal_tracker.data["signal_history"]) == 1, \
+        assert len(signal_tracker.data["signal_history"]) == 1, (
             "Signal tracking should not be affected by Telegram failure"
+        )
 
         print("   ✅ Telegram failure handled gracefully")
         print("   ✅ Signal still tracked despite notification failure")

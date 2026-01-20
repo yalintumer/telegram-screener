@@ -2,6 +2,7 @@
 Analytics and reporting module for telegram-screener
 Tracks system performance, generates weekly reports
 """
+
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -31,59 +32,50 @@ class Analytics:
 
     def _default_data(self) -> dict:
         """Default analytics data structure"""
-        return {
-            "market_scans": [],
-            "stage1_scans": [],
-            "stage2_scans": [],
-            "alerts_sent": [],
-            "last_report_date": None
-        }
+        return {"market_scans": [], "stage1_scans": [], "stage2_scans": [], "alerts_sent": [], "last_report_date": None}
 
     def _save_data(self):
         """Save analytics data to file"""
         try:
-            with open(self.data_file, 'w') as f:
+            with open(self.data_file, "w") as f:
                 json.dump(self.data, f, indent=2)
         except Exception as e:
             logger.error("analytics_save_failed", error=str(e))
 
     def record_market_scan(self, found: int, added: int, updated: int):
         """Record market scanner run statistics"""
-        self.data["market_scans"].append({
-            "timestamp": datetime.now().isoformat(),
-            "found": found,
-            "added": added,
-            "updated": updated
-        })
+        self.data["market_scans"].append(
+            {"timestamp": datetime.now().isoformat(), "found": found, "added": added, "updated": updated}
+        )
         self._save_data()
 
     def record_stage1_scan(self, checked: int, passed: int):
         """Record Stage 1 (Stoch RSI + MFI) scan statistics"""
-        self.data["stage1_scans"].append({
-            "timestamp": datetime.now().isoformat(),
-            "checked": checked,
-            "passed": passed,
-            "pass_rate": (passed / checked * 100) if checked > 0 else 0
-        })
+        self.data["stage1_scans"].append(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "checked": checked,
+                "passed": passed,
+                "pass_rate": (passed / checked * 100) if checked > 0 else 0,
+            }
+        )
         self._save_data()
 
     def record_stage2_scan(self, checked: int, confirmed: int):
         """Record Stage 2 (WaveTrend) scan statistics"""
-        self.data["stage2_scans"].append({
-            "timestamp": datetime.now().isoformat(),
-            "checked": checked,
-            "confirmed": confirmed,
-            "confirmation_rate": (confirmed / checked * 100) if checked > 0 else 0
-        })
+        self.data["stage2_scans"].append(
+            {
+                "timestamp": datetime.now().isoformat(),
+                "checked": checked,
+                "confirmed": confirmed,
+                "confirmation_rate": (confirmed / checked * 100) if checked > 0 else 0,
+            }
+        )
         self._save_data()
 
     def record_alert_sent(self, symbol: str, price: float):
         """Record Telegram alert sent"""
-        self.data["alerts_sent"].append({
-            "timestamp": datetime.now().isoformat(),
-            "symbol": symbol,
-            "price": price
-        })
+        self.data["alerts_sent"].append({"timestamp": datetime.now().isoformat(), "symbol": symbol, "price": price})
         self._save_data()
 
     def get_weekly_stats(self) -> dict:
@@ -96,22 +88,10 @@ class Analytics:
         cutoff = datetime.now() - timedelta(days=7)
 
         # Filter data for past 7 days
-        market_scans = [
-            s for s in self.data["market_scans"]
-            if datetime.fromisoformat(s["timestamp"]) > cutoff
-        ]
-        stage1_scans = [
-            s for s in self.data["stage1_scans"]
-            if datetime.fromisoformat(s["timestamp"]) > cutoff
-        ]
-        stage2_scans = [
-            s for s in self.data["stage2_scans"]
-            if datetime.fromisoformat(s["timestamp"]) > cutoff
-        ]
-        alerts = [
-            a for a in self.data["alerts_sent"]
-            if datetime.fromisoformat(a["timestamp"]) > cutoff
-        ]
+        market_scans = [s for s in self.data["market_scans"] if datetime.fromisoformat(s["timestamp"]) > cutoff]
+        stage1_scans = [s for s in self.data["stage1_scans"] if datetime.fromisoformat(s["timestamp"]) > cutoff]
+        stage2_scans = [s for s in self.data["stage2_scans"] if datetime.fromisoformat(s["timestamp"]) > cutoff]
+        alerts = [a for a in self.data["alerts_sent"] if datetime.fromisoformat(a["timestamp"]) > cutoff]
 
         # Calculate aggregates
         total_market_scans = len(market_scans)
@@ -119,13 +99,9 @@ class Analytics:
         total_stage2_scans = len(stage2_scans)
         total_alerts = len(alerts)
 
-        avg_stage1_pass_rate = (
-            sum(s["pass_rate"] for s in stage1_scans) / len(stage1_scans)
-            if stage1_scans else 0
-        )
+        avg_stage1_pass_rate = sum(s["pass_rate"] for s in stage1_scans) / len(stage1_scans) if stage1_scans else 0
         avg_stage2_confirm_rate = (
-            sum(s["confirmation_rate"] for s in stage2_scans) / len(stage2_scans)
-            if stage2_scans else 0
+            sum(s["confirmation_rate"] for s in stage2_scans) / len(stage2_scans) if stage2_scans else 0
         )
 
         return {
@@ -136,7 +112,7 @@ class Analytics:
             "alerts_sent": total_alerts,
             "avg_stage1_pass_rate": avg_stage1_pass_rate,
             "avg_stage2_confirm_rate": avg_stage2_confirm_rate,
-            "alert_symbols": list({a["symbol"] for a in alerts})
+            "alert_symbols": list({a["symbol"] for a in alerts}),
         }
 
     def generate_weekly_report(self, signal_tracker: SignalTracker) -> str:
@@ -155,10 +131,10 @@ class Analytics:
         all_stats = signal_tracker.get_all_stats()
 
         # Extract values from aggregate stats
-        total_signals = all_stats.get('total_signals', 0)
-        evaluated_signals = all_stats.get('evaluated', 0)
-        avg_return = all_stats.get('avg_return') or 0
-        avg_win_rate = all_stats.get('win_rate') or 0
+        total_signals = all_stats.get("total_signals", 0)
+        evaluated_signals = all_stats.get("evaluated", 0)
+        avg_return = all_stats.get("avg_return") or 0
+        avg_win_rate = all_stats.get("win_rate") or 0
 
         # Build report
         lines = [
@@ -178,30 +154,36 @@ class Analytics:
             f"   • Unique Symbols: {len(stats['alert_symbols'])}",
         ]
 
-        if stats['alert_symbols']:
+        if stats["alert_symbols"]:
             lines.append(f"   • Symbols: {', '.join(stats['alert_symbols'])}")
 
-        lines.extend([
-            "",
-            "📈 SIGNAL PERFORMANCE:",
-            f"   • Total Symbols Tracked: {total_signals}",
-            f"   • Signals Evaluated (7+ days old): {evaluated_signals}",
-        ])
+        lines.extend(
+            [
+                "",
+                "📈 SIGNAL PERFORMANCE:",
+                f"   • Total Symbols Tracked: {total_signals}",
+                f"   • Signals Evaluated (7+ days old): {evaluated_signals}",
+            ]
+        )
 
         if evaluated_signals > 0:
-            lines.extend([
-                f"   • Average Return: {avg_return:.1f}%",
-                f"   • Win Rate: {avg_win_rate:.1f}%",
-            ])
+            lines.extend(
+                [
+                    f"   • Average Return: {avg_return:.1f}%",
+                    f"   • Win Rate: {avg_win_rate:.1f}%",
+                ]
+            )
         else:
             lines.append("   • No signals evaluated yet (need 7+ days)")
 
-        lines.extend([
-            "",
-            "=" * 60,
-            f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            "=" * 60,
-        ])
+        lines.extend(
+            [
+                "",
+                "=" * 60,
+                f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+                "=" * 60,
+            ]
+        )
 
         return "\n".join(lines)
 

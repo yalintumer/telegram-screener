@@ -91,9 +91,7 @@ class NotionClient:
         """Delete a symbol from the watchlist database."""
         return self._repo.delete_from_watchlist(symbol)
 
-    def update_watchlist_date(
-        self, symbol: str, page_id: str | None = None
-    ) -> bool:
+    def update_watchlist_date(self, symbol: str, page_id: str | None = None) -> bool:
         """Update the date of an existing watchlist entry."""
         return self._repo.update_watchlist_date(symbol, page_id)
 

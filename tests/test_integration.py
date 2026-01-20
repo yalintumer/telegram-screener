@@ -1,4 +1,5 @@
 """Integration tests - smoke tests for full system workflow."""
+
 import json
 
 import pandas as pd

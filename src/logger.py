@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Context variable for correlation ID (thread-safe)
-_correlation_id: ContextVar[str] = ContextVar('correlation_id', default='')
+_correlation_id: ContextVar[str] = ContextVar("correlation_id", default="")
 
 
 def set_correlation_id(correlation_id: str = None) -> str:
@@ -35,7 +35,7 @@ class StructuredLogger:
         # Add correlation ID if present
         cid = get_correlation_id()
         if cid:
-            kwargs['cid'] = cid
+            kwargs["cid"] = cid
 
         if kwargs:
             kv_str = " ".join(f"{k}={v}" for k, v in kwargs.items())
@@ -79,10 +79,7 @@ def setup_logger(level: str = "INFO", log_file: bool = True):
     # Console handler with color-friendly format
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(numeric_level)
-    console_fmt = logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(message)s",
-        datefmt="%H:%M:%S"
-    )
+    console_fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
     console_handler.setFormatter(console_fmt)
     base_logger.addHandler(console_handler)
 
@@ -94,10 +91,7 @@ def setup_logger(level: str = "INFO", log_file: bool = True):
         log_path = log_dir / f"screener_{datetime.now():%Y%m%d}.log"
         file_handler = logging.FileHandler(log_path, encoding="utf-8")
         file_handler.setLevel(logging.DEBUG)  # File gets all logs
-        file_fmt = logging.Formatter(
-            "%(asctime)s [%(levelname)s] %(name)s - %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S"
-        )
+        file_fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
         file_handler.setFormatter(file_fmt)
         base_logger.addHandler(file_handler)
 

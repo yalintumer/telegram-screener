@@ -2,6 +2,7 @@
 Simple rate limiter for external API calls.
 Thread-safe, no external dependencies.
 """
+
 import threading
 import time
 from collections import defaultdict
@@ -71,7 +72,7 @@ class RateLimiter:
                         service=service,
                         wait_seconds=round(wait_time, 1),
                         current_count=bucket["count"],
-                        limit=limit
+                        limit=limit,
                     )
                     # Release lock while sleeping
                     self._lock.release()
@@ -111,7 +112,7 @@ class RateLimiter:
                     "used": bucket["count"],
                     "limit": limit,
                     "remaining": max(0, limit - bucket["count"]),
-                    "resets_in": max(0, 60 - elapsed)
+                    "resets_in": max(0, 60 - elapsed),
                 }
         return stats
 

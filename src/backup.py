@@ -2,6 +2,7 @@
 Database backup system for Notion data
 Automatically exports and stores Notion database contents
 """
+
 import json
 from datetime import datetime
 from pathlib import Path
@@ -79,20 +80,22 @@ class NotionBackup:
                 "timestamp": timestamp,
                 "backed_up_at": datetime.now().isoformat(),
                 "page_count": len(results),
-                "pages": results
+                "pages": results,
             }
 
             # Atomic write
-            temp_file = filepath.with_suffix('.tmp')
-            with open(temp_file, 'w', encoding='utf-8') as f:
+            temp_file = filepath.with_suffix(".tmp")
+            with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(backup_data, f, indent=2, default=str)
             temp_file.rename(filepath)
 
-            logger.info("backup.completed",
-                       database=database_name,
-                       pages=len(results),
-                       file=str(filepath),
-                       size_kb=filepath.stat().st_size // 1024)
+            logger.info(
+                "backup.completed",
+                database=database_name,
+                pages=len(results),
+                file=str(filepath),
+                size_kb=filepath.stat().st_size // 1024,
+            )
 
             return str(filepath)
 
@@ -126,9 +129,7 @@ class NotionBackup:
                 response = notion_client._request("post", url, json=payload)
 
                 if response.status_code != 200:
-                    logger.error("backup.query_error",
-                               status=response.status_code,
-                               error=response.text[:100])
+                    logger.error("backup.query_error", status=response.status_code, error=response.text[:100])
                     return None
 
                 data = response.json()
@@ -136,10 +137,9 @@ class NotionBackup:
                 has_more = data.get("has_more", False)
                 start_cursor = data.get("next_cursor")
 
-                logger.debug("backup.page_fetched",
-                           count=len(data.get("results", [])),
-                           total=len(results),
-                           has_more=has_more)
+                logger.debug(
+                    "backup.page_fetched", count=len(data.get("results", [])), total=len(results), has_more=has_more
+                )
 
             return results
 
@@ -171,9 +171,7 @@ class NotionBackup:
                     failed.append(name)
                     print(f"   ⚠️  Failed to backup {name}")
 
-        logger.info("backup.all_completed",
-                   success=len(backup_files),
-                   failed=len(failed))
+        logger.info("backup.all_completed", success=len(backup_files), failed=len(failed))
 
         return backup_files
 
@@ -221,9 +219,7 @@ class NotionBackup:
             with open(backup_file) as f:
                 data = json.load(f)
 
-            logger.info("backup_loaded",
-                       file=backup_file,
-                       pages=data.get("page_count", 0))
+            logger.info("backup_loaded", file=backup_file, pages=data.get("page_count", 0))
 
             return data
 
@@ -262,7 +258,7 @@ class NotionBackup:
         # Group by database name
         databases = {}
         for filepath in backup_files:
-            db_name = filepath.stem.rsplit('_', 2)[0]  # Extract name before timestamp
+            db_name = filepath.stem.rsplit("_", 2)[0]  # Extract name before timestamp
             if db_name not in databases:
                 databases[db_name] = 0
             databases[db_name] += 1
@@ -271,5 +267,5 @@ class NotionBackup:
             "total_backups": len(backup_files),
             "total_size_mb": total_size / (1024 * 1024),
             "databases": databases,
-            "backup_dir": str(self.backup_dir)
+            "backup_dir": str(self.backup_dir),
         }

@@ -25,12 +25,8 @@ class TelegramClient:
         """Get or create shared requests session for connection pooling."""
         if cls._session is None:
             cls._session = requests.Session()
-            adapter = requests.adapters.HTTPAdapter(
-                pool_connections=2,
-                pool_maxsize=5,
-                max_retries=0
-            )
-            cls._session.mount('https://', adapter)
+            adapter = requests.adapters.HTTPAdapter(pool_connections=2, pool_maxsize=5, max_retries=0)
+            cls._session.mount("https://", adapter)
             logger.debug("telegram.session_created")
         return cls._session
 
@@ -70,12 +66,12 @@ class TelegramClient:
                 r = session.post(
                     url,
                     json={"chat_id": self.chat_id, "text": text, "parse_mode": parse_mode},
-                    timeout=TELEGRAM_TIMEOUT
+                    timeout=TELEGRAM_TIMEOUT,
                 )
 
                 # Handle rate limiting (429)
                 if r.status_code == 429:
-                    retry_after = int(r.headers.get('Retry-After', 5))
+                    retry_after = int(r.headers.get("Retry-After", 5))
                     logger.warning("telegram.rate_limited", retry_after=retry_after)
                     if attempt < MAX_RETRY_ATTEMPTS:
                         time.sleep(retry_after)
@@ -96,14 +92,14 @@ class TelegramClient:
                 last_error = e
                 logger.warning("telegram.timeout", attempt=attempt)
                 if attempt < MAX_RETRY_ATTEMPTS:
-                    time.sleep(2 ** attempt)  # Exponential backoff
+                    time.sleep(2**attempt)  # Exponential backoff
                     continue
 
             except requests.RequestException as e:
                 last_error = e
                 logger.error("telegram.network_error", attempt=attempt, error=str(e)[:50])
                 if attempt < MAX_RETRY_ATTEMPTS:
-                    time.sleep(2 ** attempt)
+                    time.sleep(2**attempt)
                     continue
 
             except Exception as e:
@@ -117,9 +113,7 @@ class TelegramClient:
         # Check if we've hit max consecutive failures
         if self._consecutive_failures >= self._max_consecutive_failures:
             logger.error(
-                "telegram.critical_failure",
-                consecutive_failures=self._consecutive_failures,
-                error=str(last_error)
+                "telegram.critical_failure", consecutive_failures=self._consecutive_failures, error=str(last_error)
             )
             raise TelegramError(
                 f"Telegram critically failed: {self._consecutive_failures} consecutive failures. "
@@ -132,9 +126,7 @@ class TelegramClient:
 
         # Non-critical: log and return False
         logger.warning(
-            "telegram.send_failed",
-            consecutive_failures=self._consecutive_failures,
-            error=str(last_error)[:100]
+            "telegram.send_failed", consecutive_failures=self._consecutive_failures, error=str(last_error)[:100]
         )
         return False
 

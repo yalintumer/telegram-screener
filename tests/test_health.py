@@ -1,6 +1,7 @@
 """
 Tests for health check functionality
 """
+
 import json
 
 from src.health import HealthCheck, get_health
@@ -52,11 +53,7 @@ class TestHealthCheck:
         health_file = tmp_path / "health.json"
         health = HealthCheck(health_file=health_file)
 
-        health.scan_completed(
-            symbols_scanned=500,
-            signals_found=5,
-            duration_seconds=120.5
-        )
+        health.scan_completed(symbols_scanned=500, signals_found=5, duration_seconds=120.5)
 
         data = json.loads(health_file.read_text())
         assert data["status"] == "healthy"
@@ -155,6 +152,7 @@ class TestGlobalHealth:
         """Test that get_health returns singleton"""
         # Reset global state
         import src.health
+
         src.health._health = None
 
         health1 = get_health()
@@ -165,6 +163,7 @@ class TestGlobalHealth:
     def test_get_health_creates_instance(self):
         """Test that get_health creates instance if None"""
         import src.health
+
         src.health._health = None
 
         health = get_health()

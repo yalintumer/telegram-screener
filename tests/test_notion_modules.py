@@ -3,6 +3,7 @@ Tests for Notion HTTP client and repository.
 
 Uses `responses` library for HTTP mocking - deterministic and fast.
 """
+
 from unittest.mock import patch
 
 import pytest

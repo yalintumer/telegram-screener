@@ -2,6 +2,7 @@
 Retry utilities with exponential backoff.
 Simple, no external dependencies.
 """
+
 import random
 import time
 from collections.abc import Callable
@@ -13,6 +14,7 @@ from .logger import logger
 
 class RetryError(Exception):
     """Raised when all retry attempts fail."""
+
     def __init__(self, message: str, last_exception: Exception | None = None):
         super().__init__(message)
         self.last_exception = last_exception
@@ -25,7 +27,7 @@ def retry_with_backoff(
     exponential_base: float = 2.0,
     jitter: bool = True,
     retryable_exceptions: tuple[type[Exception], ...] = (Exception,),
-    on_retry: Callable[[int, Exception, float], None] | None = None
+    on_retry: Callable[[int, Exception, float], None] | None = None,
 ):
     """
     Decorator for retry with exponential backoff.
@@ -44,6 +46,7 @@ def retry_with_backoff(
         def call_api():
             return requests.get(url)
     """
+
     def decorator(func: Callable):
         @wraps(func)
         def wrapper(*args, **kwargs):
@@ -57,14 +60,10 @@ def retry_with_backoff(
 
                     if attempt == max_attempts:
                         logger.error(
-                            "retry.exhausted",
-                            function=func.__name__,
-                            attempts=max_attempts,
-                            error=str(e)[:100]
+                            "retry.exhausted", function=func.__name__, attempts=max_attempts, error=str(e)[:100]
                         )
                         raise RetryError(
-                            f"{func.__name__} failed after {max_attempts} attempts: {e}",
-                            last_exception=e
+                            f"{func.__name__} failed after {max_attempts} attempts: {e}", last_exception=e
                         ) from e
 
                     # Calculate delay with exponential backoff
@@ -80,7 +79,7 @@ def retry_with_backoff(
                         attempt=attempt,
                         max_attempts=max_attempts,
                         delay=round(delay, 2),
-                        error=str(e)[:50]
+                        error=str(e)[:50],
                     )
 
                     if on_retry:
@@ -92,6 +91,7 @@ def retry_with_backoff(
             raise RetryError(f"{func.__name__} failed", last_exception=last_exception)
 
         return wrapper
+
     return decorator
 
 
@@ -107,6 +107,7 @@ def is_retryable_http_status(status_code: int) -> bool:
 
 class RetryableRequestException(Exception):
     """Exception for retryable HTTP errors."""
+
     def __init__(self, message: str, status_code: int):
         super().__init__(message)
         self.status_code = status_code

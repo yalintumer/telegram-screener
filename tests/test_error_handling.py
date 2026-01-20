@@ -1,6 +1,7 @@
 """
 Test error handling and edge cases
 """
+
 from unittest.mock import Mock, patch
 
 import pytest
@@ -24,7 +25,7 @@ class TestNotionClientErrorHandling:
         with pytest.raises(ConfigError):
             NotionClient("valid_token", signals_database_id="YOUR_DATABASE", buy_database_id="buy_db")
 
-    @patch('requests.post')
+    @patch("requests.post")
     def test_network_error_handling(self, mock_post):
         """Test handling of network errors - graceful degradation"""
         mock_post.side_effect = Exception("Network error")
@@ -38,7 +39,7 @@ class TestNotionClientErrorHandling:
         assert symbols == []
         assert mapping == {}
 
-    @patch('requests.post')
+    @patch("requests.post")
     def test_empty_database_response(self, mock_post):
         """Test handling of empty database"""
         mock_post.return_value.json.return_value = {"results": []}
@@ -54,7 +55,7 @@ class TestNotionClientErrorHandling:
 class TestTelegramClientErrorHandling:
     """Test Telegram error handling"""
 
-    @patch('src.telegram_client.time.sleep')  # Skip retry delays
+    @patch("src.telegram_client.time.sleep")  # Skip retry delays
     def test_invalid_bot_token(self, mock_sleep):
         """Test with placeholder bot token - non-critical returns False"""
         client = TelegramClient("YOUR_BOT_TOKEN", "123456")
@@ -63,7 +64,7 @@ class TestTelegramClientErrorHandling:
         result = client.send("Test message")
         assert not result
 
-    @patch('src.telegram_client.time.sleep')  # Skip retry delays
+    @patch("src.telegram_client.time.sleep")  # Skip retry delays
     def test_invalid_bot_token_critical(self, mock_sleep):
         """Test with placeholder bot token - critical raises"""
         client = TelegramClient("YOUR_BOT_TOKEN", "123456")
@@ -72,8 +73,8 @@ class TestTelegramClientErrorHandling:
         with pytest.raises(TelegramError):
             client.send("Test message", critical=True)
 
-    @patch('src.telegram_client.time.sleep')  # Skip retry delays
-    @patch('requests.post')
+    @patch("src.telegram_client.time.sleep")  # Skip retry delays
+    @patch("requests.post")
     def test_network_error(self, mock_post, mock_sleep):
         """Test Telegram network error - non-critical returns False"""
         mock_post.side_effect = Exception("Network error")
@@ -84,8 +85,8 @@ class TestTelegramClientErrorHandling:
         result = client.send("Test")
         assert not result
 
-    @patch('src.telegram_client.time.sleep')  # Skip retry delays
-    @patch('requests.post')
+    @patch("src.telegram_client.time.sleep")  # Skip retry delays
+    @patch("requests.post")
     def test_network_error_critical(self, mock_post, mock_sleep):
         """Test Telegram network error - critical raises"""
         mock_post.side_effect = Exception("Network error")
@@ -95,13 +96,13 @@ class TestTelegramClientErrorHandling:
         with pytest.raises(TelegramError):
             client.send("Test", critical=True)
 
-    @patch('src.telegram_client.time.sleep')  # Skip retry delays
-    @patch('requests.post')
+    @patch("src.telegram_client.time.sleep")  # Skip retry delays
+    @patch("requests.post")
     def test_rate_limit_error(self, mock_post, mock_sleep):
         """Test Telegram rate limiting - returns False after retries"""
         mock_response = Mock()
         mock_response.status_code = 429
-        mock_response.headers = {'Retry-After': '1'}
+        mock_response.headers = {"Retry-After": "1"}
         mock_response.raise_for_status.side_effect = Exception("Rate limited")
         mock_post.return_value = mock_response
 
@@ -111,8 +112,8 @@ class TestTelegramClientErrorHandling:
         result = client.send("Test")
         assert not result
 
-    @patch('src.telegram_client.time.sleep')  # Skip retry delays
-    @patch('requests.post')
+    @patch("src.telegram_client.time.sleep")  # Skip retry delays
+    @patch("requests.post")
     def test_consecutive_failures_raises(self, mock_post, mock_sleep):
         """Test that 5 consecutive failures raises TelegramError"""
         mock_post.side_effect = Exception("Network error")
@@ -139,7 +140,7 @@ class TestDataSourceErrorHandling:
         # Should return None for invalid symbols
         assert result is None
 
-    @patch('yfinance.Ticker')
+    @patch("yfinance.Ticker")
     def test_network_failure(self, mock_ticker):
         """Test yfinance network failure"""
         mock_instance = Mock()
@@ -151,10 +152,11 @@ class TestDataSourceErrorHandling:
         # Should handle gracefully
         assert result is None
 
-    @patch('yfinance.Ticker')
+    @patch("yfinance.Ticker")
     def test_empty_data_response(self, mock_ticker):
         """Test empty data from yfinance"""
         import pandas as pd
+
         mock_instance = Mock()
         mock_instance.history.return_value = pd.DataFrame()  # Empty
         mock_ticker.return_value = mock_instance
@@ -181,7 +183,7 @@ class TestConfigValidation:
             }
         }
 
-        with pytest.raises(Exception):  # Pydantic ValidationError
+        with pytest.raises((ValueError, TypeError)):  # Pydantic ValidationError
             Config(**invalid_config)
 
     def test_placeholder_values_rejected(self):
@@ -189,10 +191,7 @@ class TestConfigValidation:
         from src.config import NotionConfig
 
         with pytest.raises(ValueError):
-            NotionConfig(
-                api_token="YOUR_TOKEN",
-                database_id="real_id"
-            )
+            NotionConfig(api_token="YOUR_TOKEN", database_id="real_id")
 
 
 # Note: TestEndToEndErrorScenarios removed because it imports src.main
@@ -201,5 +200,5 @@ class TestConfigValidation:
 # or the dependency is removed from main.py
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

@@ -63,7 +63,7 @@ def update_signal_performance(signal_tracker: SignalTracker, lookback_days: int 
                 continue
 
             ticker = yf.Ticker(symbol)
-            current_price = ticker.info.get('currentPrice') or ticker.info.get('regularMarketPrice')
+            current_price = ticker.info.get("currentPrice") or ticker.info.get("regularMarketPrice")
 
             if current_price:
                 signal_tracker.update_signal_performance(symbol, lookback_days)
@@ -103,7 +103,7 @@ def run_market_scan(cfg: Config) -> dict | None:
         api_token=cfg.notion.api_token,
         database_id=cfg.notion.database_id,
         signals_database_id=cfg.notion.signals_database_id,
-        buy_database_id=cfg.notion.buy_database_id
+        buy_database_id=cfg.notion.buy_database_id,
     )
 
     # Get symbols already in signals or buy databases (to avoid duplicates)
@@ -140,7 +140,7 @@ def run_market_scan(cfg: Config) -> dict | None:
         # === STAGE 0: Market Filter ===
         result = check_market_filter(symbol, cache=cache)
 
-        if not result or not result.get('passed'):
+        if not result or not result.get("passed"):
             continue
 
         filter_passed_count += 1
@@ -167,7 +167,7 @@ def run_market_scan(cfg: Config) -> dict | None:
                     if success:
                         added_count += 1
                         print(f"   🆕 {symbol}: Added to Signals DB")
-                        print(f"      Market Cap: ${result['market_cap']/1e9:.1f}B")
+                        print(f"      Market Cap: ${result['market_cap'] / 1e9:.1f}B")
                         print(f"      Stoch RSI D: {result['stoch_d']:.1f}, K: {result['stoch_k']:.1f}")
                         print(f"      Price: ${result['price']:.2f} < BB Lower: ${result['bb_lower']:.2f}")
                         print(f"      MFI: {result['mfi']:.1f} (3-day uptrend ✓)")
@@ -181,7 +181,7 @@ def run_market_scan(cfg: Config) -> dict | None:
     signal_tracker = SignalTracker()
     perf_update = update_signal_performance(signal_tracker, lookback_days=7)
     print(f"   ✅ Performance updated: {perf_update['updated']} signals evaluated")
-    if perf_update['failed'] > 0:
+    if perf_update["failed"] > 0:
         print(f"   ⚠️  Failed to evaluate: {perf_update['failed']} signals")
 
     # Record analytics
@@ -189,16 +189,13 @@ def run_market_scan(cfg: Config) -> dict | None:
     analytics.record_market_scan(filter_passed_count, added_count, 0)
     analytics.record_stage1_scan(
         checked=filter_passed_count,  # Only those that passed market filter get Stage 1 check
-        passed=signal_found_count
+        passed=signal_found_count,
     )
 
     # Backup Notion databases
     print("\n💾 Backing up Notion databases...")
     backup = NotionBackup()
-    databases = {
-        "signals": cfg.notion.signals_database_id,
-        "buy": cfg.notion.buy_database_id
-    }
+    databases = {"signals": cfg.notion.signals_database_id, "buy": cfg.notion.buy_database_id}
     backup.backup_all(notion, databases)
 
     deleted = backup.cleanup_old_backups(days=30)
@@ -234,17 +231,22 @@ def run_market_scan(cfg: Config) -> dict | None:
     print(f"   Added to Signals DB: {added_count}")
     print("=" * 60 + "\n")
 
-    logger.info("market_scan_completed",
-                scanned=len(sp500_symbols), skipped=skipped_count,
-                filter_passed=filter_passed_count, signals=signal_found_count, added=added_count,
-                performance_updated=perf_update['updated'])
+    logger.info(
+        "market_scan_completed",
+        scanned=len(sp500_symbols),
+        skipped=skipped_count,
+        filter_passed=filter_passed_count,
+        signals=signal_found_count,
+        added=added_count,
+        performance_updated=perf_update["updated"],
+    )
 
     return {
         "symbols_checked": len(sp500_symbols),
         "skipped": skipped_count,
         "filter_passed": filter_passed_count,
         "signals_found": signal_found_count,
-        "added": added_count
+        "added": added_count,
     }
 
 
@@ -262,10 +264,7 @@ def run_wavetrend_scan(cfg: Config) -> dict | None:
     """
     # Initialize clients and trackers
     notion = NotionClient(
-        cfg.notion.api_token,
-        cfg.notion.database_id,
-        cfg.notion.signals_database_id,
-        cfg.notion.buy_database_id
+        cfg.notion.api_token, cfg.notion.database_id, cfg.notion.signals_database_id, cfg.notion.buy_database_id
     )
     telegram = TelegramClient(cfg.telegram.bot_token, cfg.telegram.chat_id)
     signal_tracker = SignalTracker()
@@ -285,7 +284,9 @@ def run_wavetrend_scan(cfg: Config) -> dict | None:
     # Show daily stats
     daily_stats = signal_tracker.get_daily_stats()
     logger.info("signal_tracker.daily_stats", **daily_stats)
-    print(f"\n📊 Alert Stats Today: {daily_stats['alerts_sent']}/5 sent, {daily_stats['symbols_in_cooldown']} in cooldown\n")
+    print(
+        f"\n📊 Alert Stats Today: {daily_stats['alerts_sent']}/5 sent, {daily_stats['symbols_in_cooldown']} in cooldown\n"
+    )
 
     logger.info("wavetrend_scan_started")
 
@@ -360,18 +361,18 @@ def run_wavetrend_scan(cfg: Config) -> dict | None:
                 continue
 
             wt = wavetrend(df, channel_length=10, average_length=21)
-            stoch = stochastic_rsi(df['Close'])
+            stoch = stochastic_rsi(df["Close"])
             mfi_val = mfi(df)
-            current_price = float(df['Close'].iloc[-1])
+            current_price = float(df["Close"].iloc[-1])
 
             # Get historical performance
             perf_stats = signal_tracker.get_signal_stats(symbol)
             perf_text = ""
-            if perf_stats['evaluated'] > 0:
+            if perf_stats["evaluated"] > 0:
                 perf_text = f"\n📊 **Historical Performance ({symbol}):**\n   • Win Rate: {perf_stats['win_rate']}% | Avg Return: {perf_stats['avg_return']}%\n"
 
             # Build Telegram notification
-            today_str = date.today().strftime('%Y-%m-%d')
+            today_str = date.today().strftime("%Y-%m-%d")
             tradingview_link = f"https://www.tradingview.com/chart/?symbol={symbol}"
 
             message_lines = [
@@ -385,7 +386,7 @@ def run_wavetrend_scan(cfg: Config) -> dict | None:
                 "**✅ TWO-STAGE FILTER PASSED:**",
                 "",
                 "**🔵 Stage 1:** Stochastic RSI + MFI",
-                f"   • Stoch RSI: K={stoch['k'].iloc[-1]*100:.2f}% | D={stoch['d'].iloc[-1]*100:.2f}%",
+                f"   • Stoch RSI: K={stoch['k'].iloc[-1] * 100:.2f}% | D={stoch['d'].iloc[-1] * 100:.2f}%",
                 f"   • MFI: {mfi_val.iloc[-1]:.2f} (3-day uptrend ✓)",
                 "",
                 "**🟢 Stage 2:** WaveTrend Confirmation",
@@ -397,12 +398,14 @@ def run_wavetrend_scan(cfg: Config) -> dict | None:
             if perf_text:
                 message_lines.append(perf_text)
 
-            message_lines.extend([
-                "━━━━━━━━━━━━━━━━━━━━━━",
-                f"📅 **Date:** {today_str}",
-                "🚀 **ACTION: STRONG BUY CANDIDATE**",
-                "━━━━━━━━━━━━━━━━━━━━━━",
-            ])
+            message_lines.extend(
+                [
+                    "━━━━━━━━━━━━━━━━━━━━━━",
+                    f"📅 **Date:** {today_str}",
+                    "🚀 **ACTION: STRONG BUY CANDIDATE**",
+                    "━━━━━━━━━━━━━━━━━━━━━━",
+                ]
+            )
 
             message = "\n".join(message_lines)
 
@@ -412,11 +415,11 @@ def run_wavetrend_scan(cfg: Config) -> dict | None:
 
                 signal_data = {
                     "price": current_price,
-                    "stoch_k": float(stoch['k'].iloc[-1]),
-                    "stoch_d": float(stoch['d'].iloc[-1]),
+                    "stoch_k": float(stoch["k"].iloc[-1]),
+                    "stoch_d": float(stoch["d"].iloc[-1]),
                     "mfi": float(mfi_val.iloc[-1]),
-                    "wt1": float(wt['wt1'].iloc[-1]),
-                    "wt2": float(wt['wt2'].iloc[-1])
+                    "wt1": float(wt["wt1"].iloc[-1]),
+                    "wt2": float(wt["wt2"].iloc[-1]),
                 }
                 signal_tracker.record_alert(symbol, signal_data)
 
@@ -453,17 +456,16 @@ def run_wavetrend_scan(cfg: Config) -> dict | None:
 
     # Record analytics
     analytics = Analytics()
-    analytics.record_stage2_scan(
-        checked=len(symbols) - len(skipped_buy),
-        confirmed=len(confirmed_signals)
-    )
+    analytics.record_stage2_scan(checked=len(symbols) - len(skipped_buy), confirmed=len(confirmed_signals))
 
-    logger.info("wavetrend_scan_complete", total=len(symbols), skipped=len(skipped_buy), confirmed=len(confirmed_signals))
+    logger.info(
+        "wavetrend_scan_complete", total=len(symbols), skipped=len(skipped_buy), confirmed=len(confirmed_signals)
+    )
 
     return {
         "checked": len(symbols) - len(skipped_buy),
         "skipped": len(skipped_buy),
-        "confirmed": len(confirmed_signals)
+        "confirmed": len(confirmed_signals),
     }
 
 
@@ -499,9 +501,9 @@ def run_continuous(cfg: Config, interval: int = 3600) -> None:
             health.scan_started(cycle)
             logger.info("scan_cycle_started", cycle=cycle)
 
-            print(f"{'='*60}")
+            print(f"{'=' * 60}")
             print(f"📊 Scan Cycle {cycle} [{cid}]")
-            print(f"{'='*60}\n")
+            print(f"{'=' * 60}\n")
 
             try:
                 # Stage 1: Market Scanner (once per day)
@@ -511,8 +513,8 @@ def run_continuous(cfg: Config, interval: int = 3600) -> None:
                         print("🔍 Stage 1: Daily Market Scanner (S&P 500 → Signals DB)...\n")
                         result = run_market_scan(cfg)
                         if result:
-                            symbols_scanned = result.get('symbols_checked', 0)
-                            signals_found += result.get('signals_found', 0)
+                            symbols_scanned = result.get("symbols_checked", 0)
+                            signals_found += result.get("signals_found", 0)
                         last_market_scan_date = today
                         print()
                     except Exception as e:
@@ -527,7 +529,7 @@ def run_continuous(cfg: Config, interval: int = 3600) -> None:
                     print("🌊 Stage 2: Checking signals (WaveTrend → Buy DB)...\n")
                     result = run_wavetrend_scan(cfg)
                     if result:
-                        signals_found += result.get('confirmed', 0)
+                        signals_found += result.get("confirmed", 0)
                 except Exception as e:
                     logger.error("stage2_scan_error", cycle=cycle, error=str(e))
                     print(f"❌ Error in stage 2: {e}")
@@ -548,5 +550,5 @@ def run_continuous(cfg: Config, interval: int = 3600) -> None:
             time.sleep(interval)
 
     except KeyboardInterrupt:
-        print(f"\n\n👋 Stopped after {cycle-1} cycles")
-        logger.info("stopped_by_user", cycles=cycle-1)
+        print(f"\n\n👋 Stopped after {cycle - 1} cycles")
+        logger.info("stopped_by_user", cycles=cycle - 1)

@@ -26,10 +26,10 @@ class AlphaVantageSource:
             raise DataSourceError("Alpha Vantage API key is required")
 
         self.api_key = api_key
-        self.ts = TimeSeries(key=api_key, output_format='pandas')
+        self.ts = TimeSeries(key=api_key, output_format="pandas")
         logger.info("alpha_vantage.initialized")
 
-    def daily_ohlc(self, symbol: str, outputsize: str = 'compact') -> pd.DataFrame | None:
+    def daily_ohlc(self, symbol: str, outputsize: str = "compact") -> pd.DataFrame | None:
         """
         Fetch daily OHLC data from Alpha Vantage
 
@@ -55,20 +55,22 @@ class AlphaVantageSource:
             data = data.sort_index(ascending=True)
 
             # Rename columns to match yfinance format
-            data = data.rename(columns={
-                '1. open': 'Open',
-                '2. high': 'High',
-                '3. low': 'Low',
-                '4. close': 'Close',
-                '5. volume': 'Volume'
-            })
+            data = data.rename(
+                columns={
+                    "1. open": "Open",
+                    "2. high": "High",
+                    "3. low": "Low",
+                    "4. close": "Close",
+                    "5. volume": "Volume",
+                }
+            )
 
             # Keep only needed columns
-            data = data[['Open', 'High', 'Low', 'Close', 'Volume']]
+            data = data[["Open", "High", "Low", "Close", "Volume"]]
 
             # Reset index to have Date as column
             data = data.reset_index()
-            data = data.rename(columns={'date': 'Date'})
+            data = data.rename(columns={"date": "Date"})
 
             logger.info("alpha_vantage.success", symbol=symbol, rows=len(data))
             return data
@@ -88,9 +90,9 @@ class AlphaVantageSource:
             Latest closing price or None
         """
         try:
-            data = self.daily_ohlc(symbol, outputsize='compact')
+            data = self.daily_ohlc(symbol, outputsize="compact")
             if data is not None and len(data) > 0:
-                return float(data['Close'].iloc[-1])
+                return float(data["Close"].iloc[-1])
             return None
         except Exception as e:
             logger.error("alpha_vantage.price_error", symbol=symbol, error=str(e))
@@ -132,7 +134,7 @@ def alpha_vantage_ohlc(symbol: str, api_key: str, days: int = 100) -> pd.DataFra
         DataFrame with OHLC data
     """
     av = get_alpha_vantage(api_key)
-    outputsize = 'compact' if days <= 100 else 'full'
+    outputsize = "compact" if days <= 100 else "full"
     data = av.daily_ohlc(symbol, outputsize=outputsize)
 
     if data is not None and days < len(data):

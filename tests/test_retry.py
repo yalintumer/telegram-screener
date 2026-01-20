@@ -1,6 +1,7 @@
 """
 Tests for retry utilities with exponential backoff
 """
+
 import time
 from unittest.mock import patch
 
@@ -63,11 +64,7 @@ class TestRetryWithBackoff:
         """Test that only specified exceptions are retried"""
         call_count = 0
 
-        @retry_with_backoff(
-            max_attempts=3,
-            base_delay=0.01,
-            retryable_exceptions=(ValueError,)
-        )
+        @retry_with_backoff(max_attempts=3, base_delay=0.01, retryable_exceptions=(ValueError,))
         def raises_type_error():
             nonlocal call_count
             call_count += 1
@@ -83,18 +80,13 @@ class TestRetryWithBackoff:
         """Test that delay increases exponentially"""
         delays = []
 
-        @retry_with_backoff(
-            max_attempts=4,
-            base_delay=1.0,
-            max_delay=100.0,
-            jitter=False
-        )
+        @retry_with_backoff(max_attempts=4, base_delay=1.0, max_delay=100.0, jitter=False)
         def capture_delays():
             # Capture time between calls
             delays.append(time.time())
             raise ValueError("Fail")
 
-        with patch('src.retry.time.sleep') as mock_sleep:
+        with patch("src.retry.time.sleep") as mock_sleep:
             with pytest.raises(RetryError):
                 capture_delays()
 
@@ -107,16 +99,12 @@ class TestRetryWithBackoff:
 
     def test_max_delay_caps_backoff(self):
         """Test that delay is capped at max_delay"""
-        @retry_with_backoff(
-            max_attempts=5,
-            base_delay=10.0,
-            max_delay=15.0,
-            jitter=False
-        )
+
+        @retry_with_backoff(max_attempts=5, base_delay=10.0, max_delay=15.0, jitter=False)
         def always_fails():
             raise ValueError("Fail")
 
-        with patch('src.retry.time.sleep') as mock_sleep:
+        with patch("src.retry.time.sleep") as mock_sleep:
             with pytest.raises(RetryError):
                 always_fails()
 
@@ -127,15 +115,11 @@ class TestRetryWithBackoff:
     def test_jitter_varies_delay(self):
         """Test that jitter adds variation to delay"""
 
-        @retry_with_backoff(
-            max_attempts=10,
-            base_delay=1.0,
-            jitter=True
-        )
+        @retry_with_backoff(max_attempts=10, base_delay=1.0, jitter=True)
         def capture_with_jitter():
             raise ValueError("Fail")
 
-        with patch('src.retry.time.sleep') as mock_sleep:
+        with patch("src.retry.time.sleep") as mock_sleep:
             with pytest.raises(RetryError):
                 capture_with_jitter()
 
@@ -151,18 +135,9 @@ class TestRetryWithBackoff:
         callback_calls = []
 
         def on_retry_callback(attempt, exception, delay):
-            callback_calls.append({
-                'attempt': attempt,
-                'error': str(exception),
-                'delay': delay
-            })
+            callback_calls.append({"attempt": attempt, "error": str(exception), "delay": delay})
 
-        @retry_with_backoff(
-            max_attempts=3,
-            base_delay=0.01,
-            jitter=False,
-            on_retry=on_retry_callback
-        )
+        @retry_with_backoff(max_attempts=3, base_delay=0.01, jitter=False, on_retry=on_retry_callback)
         def flaky():
             raise ValueError("Test error")
 
@@ -171,12 +146,13 @@ class TestRetryWithBackoff:
 
         # Should have 2 callbacks (before retry 2 and 3)
         assert len(callback_calls) == 2
-        assert callback_calls[0]['attempt'] == 1
-        assert callback_calls[1]['attempt'] == 2
-        assert "Test error" in callback_calls[0]['error']
+        assert callback_calls[0]["attempt"] == 1
+        assert callback_calls[1]["attempt"] == 2
+        assert "Test error" in callback_calls[0]["error"]
 
     def test_preserves_function_name(self):
         """Test that decorator preserves function name"""
+
         @retry_with_backoff()
         def my_function():
             return "result"
@@ -187,20 +163,23 @@ class TestRetryWithBackoff:
 class TestIsRetryableHttpStatus:
     """Test is_retryable_http_status function"""
 
-    @pytest.mark.parametrize("status,expected", [
-        (429, True),   # Rate limited
-        (500, True),   # Internal server error
-        (502, True),   # Bad gateway
-        (503, True),   # Service unavailable
-        (504, True),   # Gateway timeout
-        (200, False),  # OK
-        (201, False),  # Created
-        (400, False),  # Bad request
-        (401, False),  # Unauthorized
-        (403, False),  # Forbidden
-        (404, False),  # Not found
-        (422, False),  # Unprocessable entity
-    ])
+    @pytest.mark.parametrize(
+        "status,expected",
+        [
+            (429, True),  # Rate limited
+            (500, True),  # Internal server error
+            (502, True),  # Bad gateway
+            (503, True),  # Service unavailable
+            (504, True),  # Gateway timeout
+            (200, False),  # OK
+            (201, False),  # Created
+            (400, False),  # Bad request
+            (401, False),  # Unauthorized
+            (403, False),  # Forbidden
+            (404, False),  # Not found
+            (422, False),  # Unprocessable entity
+        ],
+    )
     def test_http_status_codes(self, status, expected):
         """Test various HTTP status codes"""
         assert is_retryable_http_status(status) == expected
@@ -223,11 +202,7 @@ class TestRetryWithDifferentExceptions:
         """Test that multiple exception types can be retried"""
         call_count = 0
 
-        @retry_with_backoff(
-            max_attempts=4,
-            base_delay=0.01,
-            retryable_exceptions=(ValueError, TypeError, RuntimeError)
-        )
+        @retry_with_backoff(max_attempts=4, base_delay=0.01, retryable_exceptions=(ValueError, TypeError, RuntimeError))
         def mixed_exceptions():
             nonlocal call_count
             call_count += 1

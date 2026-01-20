@@ -28,7 +28,7 @@ class SignalTracker:
             return {
                 "daily_alerts": {},  # date -> count
                 "symbol_cooldown": {},  # symbol -> last_alert_date
-                "signal_history": []  # list of signals with performance
+                "signal_history": [],  # list of signals with performance
             }
 
         try:
@@ -41,7 +41,7 @@ class SignalTracker:
     def _save_data(self):
         """Save signal tracking data to JSON file"""
         try:
-            with open(self.data_file, 'w') as f:
+            with open(self.data_file, "w") as f:
                 json.dump(self.data, f, indent=2)
         except Exception as e:
             logger.error("signal_tracker.save_failed", error=str(e))
@@ -95,19 +95,13 @@ class SignalTracker:
         self.data["symbol_cooldown"][symbol] = now
 
         # Add to signal history
-        signal_record = {
-            "symbol": symbol,
-            "date": now,
-            "data": signal_data,
-            "tracking_start": now
-        }
+        signal_record = {"symbol": symbol, "date": now, "data": signal_data, "tracking_start": now}
         self.data["signal_history"].append(signal_record)
 
         # Clean old daily alerts (keep last 7 days)
         cutoff_date = (datetime.now() - timedelta(days=7)).date().isoformat()
         self.data["daily_alerts"] = {
-            date: count for date, count in self.data["daily_alerts"].items()
-            if date >= cutoff_date
+            date: count for date, count in self.data["daily_alerts"].items() if date >= cutoff_date
         }
 
         self._save_data()
@@ -119,11 +113,14 @@ class SignalTracker:
         return {
             "date": today,
             "alerts_sent": self.data["daily_alerts"].get(today, 0),
-            "symbols_in_cooldown": len([
-                s for s, date in self.data["symbol_cooldown"].items()
-                if (datetime.now() - datetime.fromisoformat(date)).days < 7
-            ]),
-            "total_tracked_signals": len(self.data["signal_history"])
+            "symbols_in_cooldown": len(
+                [
+                    s
+                    for s, date in self.data["symbol_cooldown"].items()
+                    if (datetime.now() - datetime.fromisoformat(date)).days < 7
+                ]
+            ),
+            "total_tracked_signals": len(self.data["signal_history"]),
         }
 
     def get_symbol_cooldown_status(self, symbol: str) -> dict | None:
@@ -138,7 +135,7 @@ class SignalTracker:
             "symbol": symbol,
             "last_alert": last_alert.isoformat(),
             "days_since": days_since,
-            "can_alert_after": 7 - days_since if days_since < 7 else 0
+            "can_alert_after": 7 - days_since if days_since < 7 else 0,
         }
 
     def update_signal_performance(self, symbol: str, days_after: int = 5) -> dict | None:
@@ -191,6 +188,7 @@ class SignalTracker:
                 # Convert both sides to pandas DatetimeIndex for safe comparison
                 # This handles numpy.ndarray vs Timestamp incompatibility
                 import pandas as pd
+
                 target_ts = pd.Timestamp(target_date).normalize()
 
                 # Convert index to DatetimeIndex, remove timezone, then normalize
@@ -212,14 +210,13 @@ class SignalTracker:
                         "entry_price": signal_price,
                         "exit_price": future_price,
                         "return_pct": round(price_change, 2),
-                        "evaluated_at": now.isoformat()
+                        "evaluated_at": now.isoformat(),
                     }
 
                     updated_any = True
-                    logger.info("signal_performance_updated",
-                               symbol=symbol,
-                               return_pct=price_change,
-                               days_after=days_after)
+                    logger.info(
+                        "signal_performance_updated", symbol=symbol, return_pct=price_change, days_after=days_after
+                    )
 
             except Exception as e:
                 logger.error("signal_performance_update_failed", symbol=symbol, error=str(e))
@@ -252,7 +249,7 @@ class SignalTracker:
                 "evaluated": 0,
                 "pending": len(signals),
                 "avg_return": None,
-                "win_rate": None
+                "win_rate": None,
             }
 
         returns = [s["performance"]["return_pct"] for s in evaluated_signals]
@@ -265,7 +262,7 @@ class SignalTracker:
             "avg_return": round(sum(returns) / len(returns), 2),
             "win_rate": round((wins / len(evaluated_signals)) * 100, 1),
             "best_return": max(returns) if returns else None,
-            "worst_return": min(returns) if returns else None
+            "worst_return": min(returns) if returns else None,
         }
 
     def get_all_stats(self) -> dict:

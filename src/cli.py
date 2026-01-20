@@ -22,39 +22,27 @@ Examples:
   python -m src.main --market-scan    Run Stage 1 only (S&P 500 filter)
   python -m src.main --wavetrend      Run Stage 2 only (WaveTrend confirmation)
   python -m src.main --interval 1800  Run every 30 minutes
-        """
+        """,
     )
 
-    parser.add_argument(
-        "--config",
-        default="config.yaml",
-        help="Config file path (default: config.yaml)"
-    )
+    parser.add_argument("--config", default="config.yaml", help="Config file path (default: config.yaml)")
 
     parser.add_argument(
         "--interval",
         type=int,
         default=3600,
         metavar="SECONDS",
-        help="Scan interval in seconds (default: 3600 = 1 hour)"
+        help="Scan interval in seconds (default: 3600 = 1 hour)",
+    )
+
+    parser.add_argument("--once", action="store_true", help="Run once and exit (default: continuous)")
+
+    parser.add_argument(
+        "--market-scan", action="store_true", help="Run market scanner (Stage 1) - S&P 500 → Signals DB"
     )
 
     parser.add_argument(
-        "--once",
-        action="store_true",
-        help="Run once and exit (default: continuous)"
-    )
-
-    parser.add_argument(
-        "--market-scan",
-        action="store_true",
-        help="Run market scanner (Stage 1) - S&P 500 → Signals DB"
-    )
-
-    parser.add_argument(
-        "--wavetrend",
-        action="store_true",
-        help="Run WaveTrend scan only (Stage 2) - Signals DB → Buy DB"
+        "--wavetrend", action="store_true", help="Run WaveTrend scan only (Stage 2) - Signals DB → Buy DB"
     )
 
     return parser

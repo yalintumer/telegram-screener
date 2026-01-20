@@ -25,14 +25,11 @@ from .scanner import (
 # =============================================================================
 # Sentry Initialization (Error Tracking)
 # =============================================================================
-SENTRY_DSN = os.getenv('SENTRY_DSN', '')
-ENVIRONMENT = os.getenv('ENVIRONMENT', 'production')
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "production")
 
 if SENTRY_DSN:
-    sentry_logging = LoggingIntegration(
-        level=None,
-        event_level=None
-    )
+    sentry_logging = LoggingIntegration(level=None, event_level=None)
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         environment=ENVIRONMENT,
@@ -41,7 +38,7 @@ if SENTRY_DSN:
         profiles_sample_rate=0.1,
         send_default_pii=False,
         integrations=[sentry_logging],
-        before_send=lambda event, hint: event if event.get('level') in ('error', 'fatal') else None
+        before_send=lambda event, hint: event if event.get("level") in ("error", "fatal") else None,
     )
     logger.info("sentry.initialized", environment=ENVIRONMENT)
 

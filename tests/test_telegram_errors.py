@@ -3,6 +3,7 @@ Tests for Telegram client error handling and retry logic.
 
 Uses `responses` library for HTTP mocking - deterministic and fast.
 """
+
 from unittest.mock import patch
 
 import pytest

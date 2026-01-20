@@ -1,6 +1,7 @@
 """
 Tests for Notion backup functionality
 """
+
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -46,18 +47,14 @@ class TestBackupDatabase:
         mock_response.json.return_value = {
             "results": [
                 {"id": "page1", "properties": {"Name": {"title": [{"text": {"content": "AAPL"}}]}}},
-                {"id": "page2", "properties": {"Name": {"title": [{"text": {"content": "GOOGL"}}]}}}
+                {"id": "page2", "properties": {"Name": {"title": [{"text": {"content": "GOOGL"}}]}}},
             ],
             "has_more": False,
-            "next_cursor": None
+            "next_cursor": None,
         }
         mock_notion._request.return_value = mock_response
 
-        result = backup.backup_database(
-            mock_notion,
-            database_id="test_db_123",
-            database_name="signals"
-        )
+        result = backup.backup_database(mock_notion, database_id="test_db_123", database_name="signals")
 
         assert result is not None
         assert result.endswith(".json")
@@ -80,28 +77,16 @@ class TestBackupDatabase:
         responses = [
             Mock(
                 status_code=200,
-                json=Mock(return_value={
-                    "results": [{"id": "page1"}],
-                    "has_more": True,
-                    "next_cursor": "cursor123"
-                })
+                json=Mock(return_value={"results": [{"id": "page1"}], "has_more": True, "next_cursor": "cursor123"}),
             ),
             Mock(
                 status_code=200,
-                json=Mock(return_value={
-                    "results": [{"id": "page2"}],
-                    "has_more": False,
-                    "next_cursor": None
-                })
-            )
+                json=Mock(return_value={"results": [{"id": "page2"}], "has_more": False, "next_cursor": None}),
+            ),
         ]
         mock_notion._request.side_effect = responses
 
-        result = backup.backup_database(
-            mock_notion,
-            database_id="test_db",
-            database_name="signals"
-        )
+        result = backup.backup_database(mock_notion, database_id="test_db", database_name="signals")
 
         backup_data = json.loads(Path(result).read_text())
         assert backup_data["page_count"] == 2
@@ -114,11 +99,7 @@ class TestBackupDatabase:
         mock_notion = Mock()
 
         # Test with LOADED_FROM prefix (sanitized secret)
-        result = backup.backup_database(
-            mock_notion,
-            database_id="LOADED_FROM_ENV",
-            database_name="signals"
-        )
+        result = backup.backup_database(mock_notion, database_id="LOADED_FROM_ENV", database_name="signals")
 
         assert result is None
 
@@ -135,11 +116,7 @@ class TestBackupDatabase:
         mock_response.text = "Unauthorized"
         mock_notion._request.return_value = mock_response
 
-        result = backup.backup_database(
-            mock_notion,
-            database_id="test_db",
-            database_name="signals"
-        )
+        result = backup.backup_database(mock_notion, database_id="test_db", database_name="signals")
 
         assert result is None
 
@@ -153,17 +130,10 @@ class TestBackupDatabase:
 
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "results": [{"id": "page1"}],
-            "has_more": False
-        }
+        mock_response.json.return_value = {"results": [{"id": "page1"}], "has_more": False}
         mock_notion._request.return_value = mock_response
 
-        backup.backup_database(
-            mock_notion,
-            database_id="test_db",
-            database_name="signals"
-        )
+        backup.backup_database(mock_notion, database_id="test_db", database_name="signals")
 
         # Temp file should not exist
         temp_files = list(backup_dir.glob("*.tmp"))
@@ -187,16 +157,10 @@ class TestBackupAll:
 
         mock_response = Mock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {
-            "results": [{"id": "page1"}],
-            "has_more": False
-        }
+        mock_response.json.return_value = {"results": [{"id": "page1"}], "has_more": False}
         mock_notion._request.return_value = mock_response
 
-        databases = {
-            "signals": "signals_db_id",
-            "buy": "buy_db_id"
-        }
+        databases = {"signals": "signals_db_id", "buy": "buy_db_id"}
 
         results = backup.backup_all(mock_notion, databases)
 
@@ -222,6 +186,7 @@ class TestCleanupOldBackups:
         # Set modification time to 31 days ago
         old_time = datetime.now() - timedelta(days=31)
         import os
+
         os.utime(old_file, (old_time.timestamp(), old_time.timestamp()))
 
         # Create recent file

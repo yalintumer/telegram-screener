@@ -37,7 +37,7 @@ class MarketCapCache:
     def _save_cache(self):
         """Save cache to disk"""
         try:
-            with open(self.cache_file, 'w') as f:
+            with open(self.cache_file, "w") as f:
                 json.dump(self.cache, f, indent=2)
         except Exception as e:
             logger.error("cache.save_failed", error=str(e))
@@ -76,10 +76,7 @@ class MarketCapCache:
             symbol: Stock symbol
             market_cap: Market cap value in USD
         """
-        self.cache[symbol] = {
-            "market_cap": market_cap,
-            "timestamp": datetime.now().isoformat()
-        }
+        self.cache[symbol] = {"market_cap": market_cap, "timestamp": datetime.now().isoformat()}
         self._save_cache()
         logger.debug("cache.set", symbol=symbol, market_cap=market_cap)
 
@@ -108,7 +105,7 @@ class MarketCapCache:
                 "expired_entries": 0,
                 "valid_entries": 0,
                 "oldest_entry_hours": None,
-                "newest_entry_hours": None
+                "newest_entry_hours": None,
             }
 
         now = datetime.now()
@@ -130,5 +127,5 @@ class MarketCapCache:
             "oldest_entry_hours": round(max(ages), 1) if ages else None,
             "newest_entry_hours": round(min(ages), 1) if ages else None,
             "cache_file": str(self.cache_file),
-            "ttl_hours": self.ttl_hours
+            "ttl_hours": self.ttl_hours,
         }

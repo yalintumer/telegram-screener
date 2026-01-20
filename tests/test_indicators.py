@@ -2,6 +2,7 @@
 Comprehensive tests for technical indicators
 Tests against known values and PineScript reference implementations
 """
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -57,13 +58,13 @@ class TestStochasticRSI:
         result = stochastic_rsi(prices, rsi_period=14, stoch_period=14, k=3, d=3)
 
         # Should have rsi, k, d columns
-        assert 'rsi' in result.columns
-        assert 'k' in result.columns
-        assert 'd' in result.columns
+        assert "rsi" in result.columns
+        assert "k" in result.columns
+        assert "d" in result.columns
 
         # K and D should be between 0 and 1
-        valid_k = result['k'].dropna()
-        valid_d = result['d'].dropna()
+        valid_k = result["k"].dropna()
+        valid_d = result["d"].dropna()
 
         assert (valid_k >= 0).all() and (valid_k <= 1).all()
         assert (valid_d >= 0).all() and (valid_d <= 1).all()
@@ -77,8 +78,8 @@ class TestStochasticRSI:
         result = stochastic_rsi(prices)
 
         # D should have less variance than K (it's a moving average of K)
-        k_variance = result['k'].var()
-        d_variance = result['d'].var()
+        k_variance = result["k"].var()
+        d_variance = result["d"].var()
 
         assert d_variance < k_variance
 
@@ -130,12 +131,14 @@ class TestMFI:
 
     def test_mfi_structure(self):
         """Test MFI returns values between 0-100"""
-        df = pd.DataFrame({
-            'High': [102, 103, 104, 105, 106, 107, 108, 109, 110] * 3,
-            'Low': [98, 99, 100, 101, 102, 103, 104, 105, 106] * 3,
-            'Close': [100, 101, 102, 103, 104, 105, 106, 107, 108] * 3,
-            'Volume': [1000000, 1100000, 1200000, 1300000, 1400000, 1500000, 1600000, 1700000, 1800000] * 3
-        })
+        df = pd.DataFrame(
+            {
+                "High": [102, 103, 104, 105, 106, 107, 108, 109, 110] * 3,
+                "Low": [98, 99, 100, 101, 102, 103, 104, 105, 106] * 3,
+                "Close": [100, 101, 102, 103, 104, 105, 106, 107, 108] * 3,
+                "Volume": [1000000, 1100000, 1200000, 1300000, 1400000, 1500000, 1600000, 1700000, 1800000] * 3,
+            }
+        )
 
         result = mfi(df, period=14)
         valid_values = result.dropna()
@@ -147,12 +150,14 @@ class TestMFI:
     def test_mfi_high_with_volume_increase(self):
         """Test MFI increases with rising prices and volume"""
         # Rising prices with increasing volume → high MFI
-        df = pd.DataFrame({
-            'High': [100 + i * 2 for i in range(30)],
-            'Low': [98 + i * 2 for i in range(30)],
-            'Close': [99 + i * 2 for i in range(30)],
-            'Volume': [1000000 + i * 100000 for i in range(30)]
-        })
+        df = pd.DataFrame(
+            {
+                "High": [100 + i * 2 for i in range(30)],
+                "Low": [98 + i * 2 for i in range(30)],
+                "Close": [99 + i * 2 for i in range(30)],
+                "Volume": [1000000 + i * 100000 for i in range(30)],
+            }
+        )
 
         result = mfi(df, period=14)
 
@@ -197,29 +202,33 @@ class TestWaveTrend:
 
     def test_wavetrend_structure(self):
         """Test WaveTrend returns wt1 and wt2"""
-        df = pd.DataFrame({
-            'High': [102, 103, 104, 105, 106] * 10,
-            'Low': [98, 99, 100, 101, 102] * 10,
-            'Close': [100, 101, 102, 103, 104] * 10
-        })
+        df = pd.DataFrame(
+            {
+                "High": [102, 103, 104, 105, 106] * 10,
+                "Low": [98, 99, 100, 101, 102] * 10,
+                "Close": [100, 101, 102, 103, 104] * 10,
+            }
+        )
 
         result = wavetrend(df, channel_length=10, average_length=21)
 
         # Should have wt1 and wt2 columns
-        assert 'wt1' in result.columns
-        assert 'wt2' in result.columns
+        assert "wt1" in result.columns
+        assert "wt2" in result.columns
 
     def test_wavetrend_oscillator_range(self):
         """Test WaveTrend oscillates"""
         np.random.seed(42)
-        df = pd.DataFrame({
-            'High': [100 + i + np.random.randn() for i in range(100)],
-            'Low': [98 + i + np.random.randn() for i in range(100)],
-            'Close': [99 + i + np.random.randn() for i in range(100)]
-        })
+        df = pd.DataFrame(
+            {
+                "High": [100 + i + np.random.randn() for i in range(100)],
+                "Low": [98 + i + np.random.randn() for i in range(100)],
+                "Close": [99 + i + np.random.randn() for i in range(100)],
+            }
+        )
 
         result = wavetrend(df, channel_length=10, average_length=21)
-        valid_wt1 = result['wt1'].dropna()
+        valid_wt1 = result["wt1"].dropna()
 
         # WaveTrend should have values (not all NaN)
         assert len(valid_wt1) > 0
@@ -232,10 +241,7 @@ class TestWaveTrendBuy:
 
     def test_buy_signal_structure(self):
         """Test wavetrend_buy returns boolean"""
-        wt_df = pd.DataFrame({
-            'wt1': [-60, -55, -50, -45, -40],
-            'wt2': [-58, -56, -54, -52, -50]
-        })
+        wt_df = pd.DataFrame({"wt1": [-60, -55, -50, -45, -40], "wt2": [-58, -56, -54, -52, -50]})
 
         result = wavetrend_buy(wt_df, lookback_days=3, oversold_level=-53)
 
@@ -244,10 +250,12 @@ class TestWaveTrendBuy:
     def test_cross_up_in_oversold(self):
         """Test detection of wt1 crossing above wt2 in oversold"""
         # wt1 crosses above wt2 in oversold zone
-        wt_df = pd.DataFrame({
-            'wt1': [-60, -58, -55, -50, -45],  # Rising
-            'wt2': [-58, -57, -56, -55, -54]   # Rising slower
-        })
+        wt_df = pd.DataFrame(
+            {
+                "wt1": [-60, -58, -55, -50, -45],  # Rising
+                "wt2": [-58, -57, -56, -55, -54],  # Rising slower
+            }
+        )
 
         result = wavetrend_buy(wt_df, lookback_days=3, oversold_level=-53)
 
@@ -257,10 +265,7 @@ class TestWaveTrendBuy:
     def test_no_signal_not_oversold(self):
         """Test no signal when not in oversold zone"""
         # Both wt1 and wt2 above oversold threshold
-        wt_df = pd.DataFrame({
-            'wt1': [-40, -38, -35, -30, -25],
-            'wt2': [-42, -40, -38, -36, -34]
-        })
+        wt_df = pd.DataFrame({"wt1": [-40, -38, -35, -30, -25], "wt2": [-42, -40, -38, -36, -34]})
 
         result = wavetrend_buy(wt_df, lookback_days=3, oversold_level=-53)
 
@@ -273,31 +278,33 @@ class TestEdgeCases:
 
     def test_empty_dataframe(self):
         """Test handling of empty data"""
-        df = pd.DataFrame({'Close': []})
+        df = pd.DataFrame({"Close": []})
 
         result = stoch_rsi_buy(df)
         assert not result
 
     def test_insufficient_data(self):
         """Test handling of insufficient data"""
-        df = pd.DataFrame({'Close': [100, 101, 102]})  # Only 3 points
+        df = pd.DataFrame({"Close": [100, 101, 102]})  # Only 3 points
 
         result = stoch_rsi_buy(df)
         assert not result
 
     def test_nan_handling(self):
         """Test handling of NaN values"""
-        df = pd.DataFrame({
-            'High': [100, np.nan, 102, 103, 104],
-            'Low': [98, 99, np.nan, 101, 102],
-            'Close': [99, 100, 101, np.nan, 103],
-            'Volume': [1000000, 1100000, 1200000, 1300000, 1400000]
-        })
+        df = pd.DataFrame(
+            {
+                "High": [100, np.nan, 102, 103, 104],
+                "Low": [98, 99, np.nan, 101, 102],
+                "Close": [99, 100, 101, np.nan, 103],
+                "Volume": [1000000, 1100000, 1200000, 1300000, 1400000],
+            }
+        )
 
         # Should not crash
         result = mfi(df)
         assert result is not None
 
 
-if __name__ == '__main__':
-    pytest.main([__file__, '-v'])
+if __name__ == "__main__":
+    pytest.main([__file__, "-v"])

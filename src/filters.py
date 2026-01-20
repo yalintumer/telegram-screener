@@ -34,10 +34,9 @@ except ImportError:
 # Stage 1: Market Filter
 # =============================================================================
 
+
 def check_market_filter(
-    symbol: str,
-    cache: MarketCapCache | None = None,
-    alpha_vantage_key: str | None = None
+    symbol: str, cache: MarketCapCache | None = None, alpha_vantage_key: str | None = None
 ) -> dict | None:
     """
     Check if symbol passes market scanner filters (Stage 1).
@@ -66,8 +65,9 @@ def check_market_filter(
         ...     print(f"AAPL passed with MFI={result['mfi']:.1f}")
     """
     try:
-        logger.info("market_filter_check", symbol=symbol,
-                   using_alpha_vantage=bool(alpha_vantage_key and alpha_vantage_ohlc))
+        logger.info(
+            "market_filter_check", symbol=symbol, using_alpha_vantage=bool(alpha_vantage_key and alpha_vantage_ohlc)
+        )
 
         # Get price data - use Alpha Vantage if available, else yfinance
         if alpha_vantage_key and alpha_vantage_ohlc is not None:
@@ -92,7 +92,7 @@ def check_market_filter(
             try:
                 ticker = yf.Ticker(symbol)
                 info = ticker.info
-                market_cap = info.get('marketCap', 0)
+                market_cap = info.get("marketCap", 0)
 
                 # Cache the result
                 if cache and market_cap > 0:
@@ -104,29 +104,26 @@ def check_market_filter(
 
         threshold = get_market_cap_threshold()
         if market_cap < threshold:
-            logger.info("market_filter_market_cap_too_low", symbol=symbol,
-                       market_cap=market_cap, threshold=threshold)
-            return {'passed': False, 'reason': 'market_cap_too_low'}
+            logger.info("market_filter_market_cap_too_low", symbol=symbol, market_cap=market_cap, threshold=threshold)
+            return {"passed": False, "reason": "market_cap_too_low"}
 
         # 2. Calculate Stochastic RSI (3,3,14,14)
         stoch_ind = stochastic_rsi(df["Close"], rsi_period=14, stoch_period=14, k=3, d=3)
-        stoch_d = float(stoch_ind['d'].iloc[-1])
-        stoch_k = float(stoch_ind['k'].iloc[-1])
+        stoch_d = float(stoch_ind["d"].iloc[-1])
+        stoch_k = float(stoch_ind["k"].iloc[-1])
 
         if stoch_d >= 20:
             logger.info("market_filter_stoch_not_oversold", symbol=symbol, stoch_d=stoch_d)
-            return {'passed': False, 'reason': 'stoch_d_not_oversold', 'stoch_d': stoch_d}
+            return {"passed": False, "reason": "stoch_d_not_oversold", "stoch_d": stoch_d}
 
         # 3. Check Bollinger Bands - Price < Lower Band
-        bb = bollinger_bands(df['Close'], period=20, std_dev=2.0)
-        current_price = float(df['Close'].iloc[-1])
-        bb_lower = float(bb['lower'].iloc[-1])
+        bb = bollinger_bands(df["Close"], period=20, std_dev=2.0)
+        current_price = float(df["Close"].iloc[-1])
+        bb_lower = float(bb["lower"].iloc[-1])
 
         if current_price >= bb_lower:
-            logger.info("market_filter_price_not_below_bb", symbol=symbol,
-                       price=current_price, bb_lower=bb_lower)
-            return {'passed': False, 'reason': 'price_not_below_bb',
-                   'price': current_price, 'bb_lower': bb_lower}
+            logger.info("market_filter_price_not_below_bb", symbol=symbol, price=current_price, bb_lower=bb_lower)
+            return {"passed": False, "reason": "price_not_below_bb", "price": current_price, "bb_lower": bb_lower}
 
         # 4. Check MFI <= 40
         mfi_values = mfi(df, period=14)
@@ -134,21 +131,28 @@ def check_market_filter(
 
         if mfi_current > 40:
             logger.info("market_filter_mfi_too_high", symbol=symbol, mfi=mfi_current)
-            return {'passed': False, 'reason': 'mfi_too_high', 'mfi': mfi_current}
+            return {"passed": False, "reason": "mfi_too_high", "mfi": mfi_current}
 
         # All filters passed!
-        logger.info("market_filter_passed", symbol=symbol,
-                   market_cap=market_cap, stoch_d=stoch_d, stoch_k=stoch_k,
-                   price=current_price, bb_lower=bb_lower, mfi=mfi_current)
+        logger.info(
+            "market_filter_passed",
+            symbol=symbol,
+            market_cap=market_cap,
+            stoch_d=stoch_d,
+            stoch_k=stoch_k,
+            price=current_price,
+            bb_lower=bb_lower,
+            mfi=mfi_current,
+        )
 
         return {
-            'passed': True,
-            'market_cap': market_cap,
-            'stoch_d': stoch_d,
-            'stoch_k': stoch_k,
-            'price': current_price,
-            'bb_lower': bb_lower,
-            'mfi': mfi_current
+            "passed": True,
+            "market_cap": market_cap,
+            "stoch_d": stoch_d,
+            "stoch_k": stoch_k,
+            "price": current_price,
+            "bb_lower": bb_lower,
+            "mfi": mfi_current,
         }
 
     except Exception as e:
@@ -189,10 +193,10 @@ def check_signal_criteria(symbol: str) -> dict | None:
 
         if has_stoch_signal and mfi_trending_up:
             return {
-                'stoch_k': float(stoch_ind['k'].iloc[-1]),
-                'stoch_d': float(stoch_ind['d'].iloc[-1]),
-                'mfi': float(mfi_values.iloc[-1]),
-                'mfi_uptrend': True
+                "stoch_k": float(stoch_ind["k"].iloc[-1]),
+                "stoch_d": float(stoch_ind["d"].iloc[-1]),
+                "mfi": float(mfi_values.iloc[-1]),
+                "mfi_uptrend": True,
             }
 
         return None
@@ -205,6 +209,7 @@ def check_signal_criteria(symbol: str) -> dict | None:
 # =============================================================================
 # Stage 2: WaveTrend Confirmation
 # =============================================================================
+
 
 def check_wavetrend_signal(symbol: str, use_multi_timeframe: bool = True) -> bool:
     """
@@ -250,24 +255,29 @@ def check_wavetrend_signal(symbol: str, use_multi_timeframe: bool = True) -> boo
 
             if df_weekly is not None and len(df_weekly) >= 14:
                 wt_weekly = wavetrend(df_weekly, channel_length=10, average_length=21)
-                weekly_wt1 = float(wt_weekly['wt1'].iloc[-1])
+                weekly_wt1 = float(wt_weekly["wt1"].iloc[-1])
 
                 # Reject if weekly is extremely overbought (prevents buying at tops)
                 if weekly_wt1 > 60:
-                    logger.info("wavetrend_rejected_weekly", symbol=symbol,
-                               daily_signal=True, weekly_wt1=weekly_wt1)
+                    logger.info("wavetrend_rejected_weekly", symbol=symbol, daily_signal=True, weekly_wt1=weekly_wt1)
                     return False
 
-                logger.info("wavetrend_multi_timeframe_confirmed", symbol=symbol,
-                           daily_wt1=float(wt_daily['wt1'].iloc[-1]),
-                           weekly_wt1=weekly_wt1)
+                logger.info(
+                    "wavetrend_multi_timeframe_confirmed",
+                    symbol=symbol,
+                    daily_wt1=float(wt_daily["wt1"].iloc[-1]),
+                    weekly_wt1=weekly_wt1,
+                )
             else:
                 logger.warning("weekly_data_unavailable", symbol=symbol)
 
         if has_daily_signal:
-            logger.info("wavetrend_signal_found", symbol=symbol,
-                       wt1=float(wt_daily['wt1'].iloc[-1]),
-                       wt2=float(wt_daily['wt2'].iloc[-1]))
+            logger.info(
+                "wavetrend_signal_found",
+                symbol=symbol,
+                wt1=float(wt_daily["wt1"].iloc[-1]),
+                wt2=float(wt_daily["wt2"].iloc[-1]),
+            )
 
         return has_daily_signal
 
@@ -294,15 +304,15 @@ def get_wavetrend_values(symbol: str) -> dict | None:
         wt_daily = wavetrend(df_daily, channel_length=10, average_length=21)
 
         result = {
-            'daily_wt1': float(wt_daily['wt1'].iloc[-1]),
-            'daily_wt2': float(wt_daily['wt2'].iloc[-1]),
+            "daily_wt1": float(wt_daily["wt1"].iloc[-1]),
+            "daily_wt2": float(wt_daily["wt2"].iloc[-1]),
         }
 
         # Try to get weekly data
         df_weekly = weekly_ohlc(symbol, weeks=52)
         if df_weekly is not None and len(df_weekly) >= 14:
             wt_weekly = wavetrend(df_weekly, channel_length=10, average_length=21)
-            result['weekly_wt1'] = float(wt_weekly['wt1'].iloc[-1])
+            result["weekly_wt1"] = float(wt_weekly["wt1"].iloc[-1])
 
         return result
 

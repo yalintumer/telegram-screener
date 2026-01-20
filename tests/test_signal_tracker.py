@@ -1,4 +1,5 @@
 """Tests for signal_tracker module."""
+
 import json
 from datetime import datetime, timedelta
 from unittest.mock import patch
@@ -16,11 +17,7 @@ class TestSignalTrackerInit:
         data_file = tmp_path / "signals.json"
         tracker = SignalTracker(data_file=str(data_file))
 
-        assert tracker.data == {
-            "daily_alerts": {},
-            "symbol_cooldown": {},
-            "signal_history": []
-        }
+        assert tracker.data == {"daily_alerts": {}, "symbol_cooldown": {}, "signal_history": []}
 
     def test_loads_existing_data_from_file(self, tmp_path):
         """Should load existing data from file."""
@@ -28,7 +25,7 @@ class TestSignalTrackerInit:
         existing_data = {
             "daily_alerts": {"2024-01-01": 3},
             "symbol_cooldown": {"AAPL": "2024-01-01T10:00:00"},
-            "signal_history": [{"symbol": "AAPL", "date": "2024-01-01T10:00:00"}]
+            "signal_history": [{"symbol": "AAPL", "date": "2024-01-01T10:00:00"}],
         }
         data_file.write_text(json.dumps(existing_data))
 
@@ -44,11 +41,7 @@ class TestSignalTrackerInit:
 
         tracker = SignalTracker(data_file=str(data_file))
 
-        assert tracker.data == {
-            "daily_alerts": {},
-            "symbol_cooldown": {},
-            "signal_history": []
-        }
+        assert tracker.data == {"daily_alerts": {}, "symbol_cooldown": {}, "signal_history": []}
 
 
 class TestCanSendAlert:
@@ -194,15 +187,8 @@ class TestGetDailyStats:
 
         # Add some signals in cooldown
         now = datetime.now().isoformat()
-        tracker.data["symbol_cooldown"] = {
-            "AAPL": now,
-            "GOOGL": now
-        }
-        tracker.data["signal_history"] = [
-            {"symbol": "AAPL"},
-            {"symbol": "GOOGL"},
-            {"symbol": "MSFT"}
-        ]
+        tracker.data["symbol_cooldown"] = {"AAPL": now, "GOOGL": now}
+        tracker.data["signal_history"] = [{"symbol": "AAPL"}, {"symbol": "GOOGL"}, {"symbol": "MSFT"}]
 
         stats = tracker.get_daily_stats()
 
@@ -271,7 +257,7 @@ class TestGetSignalStats:
         tracker.data["signal_history"] = [
             {"symbol": "AAPL", "performance": {"return_pct": 5.0}},
             {"symbol": "AAPL", "performance": {"return_pct": -2.0}},
-            {"symbol": "GOOGL", "performance": {"return_pct": 10.0}}
+            {"symbol": "GOOGL", "performance": {"return_pct": 10.0}},
         ]
 
         stats = tracker.get_signal_stats("AAPL")
@@ -288,7 +274,7 @@ class TestGetSignalStats:
             {"symbol": "AAPL", "performance": {"return_pct": 10.0}},
             {"symbol": "AAPL", "performance": {"return_pct": 5.0}},
             {"symbol": "AAPL", "performance": {"return_pct": -3.0}},
-            {"symbol": "AAPL", "performance": {"return_pct": 8.0}}
+            {"symbol": "AAPL", "performance": {"return_pct": 8.0}},
         ]
 
         stats = tracker.get_signal_stats()
@@ -304,7 +290,7 @@ class TestGetSignalStats:
         tracker.data["signal_history"] = [
             {"symbol": "AAPL", "performance": {"return_pct": 15.0}},
             {"symbol": "AAPL", "performance": {"return_pct": -5.0}},
-            {"symbol": "AAPL", "performance": {"return_pct": 8.0}}
+            {"symbol": "AAPL", "performance": {"return_pct": 8.0}},
         ]
 
         stats = tracker.get_signal_stats()
@@ -320,7 +306,7 @@ class TestGetSignalStats:
         tracker.data["signal_history"] = [
             {"symbol": "AAPL", "performance": {"return_pct": 5.0}},  # Evaluated
             {"symbol": "AAPL"},  # Pending (no performance)
-            {"symbol": "GOOGL"}  # Pending
+            {"symbol": "GOOGL"},  # Pending
         ]
 
         stats = tracker.get_signal_stats()
@@ -344,11 +330,11 @@ class TestUpdateSignalPerformance:
                 "symbol": "AAPL",
                 "date": old_date,
                 "data": {"price": 150.0},
-                "performance": {"return_pct": 5.0}  # Already evaluated
+                "performance": {"return_pct": 5.0},  # Already evaluated
             }
         ]
 
-        with patch('src.data_source_yfinance.daily_ohlc') as mock_ohlc:
+        with patch("src.data_source_yfinance.daily_ohlc") as mock_ohlc:
             tracker.update_signal_performance("AAPL")
             mock_ohlc.assert_not_called()
 
@@ -358,15 +344,9 @@ class TestUpdateSignalPerformance:
         tracker = SignalTracker(data_file=str(data_file))
 
         recent_date = (datetime.now() - timedelta(days=2)).isoformat()
-        tracker.data["signal_history"] = [
-            {
-                "symbol": "AAPL",
-                "date": recent_date,
-                "data": {"price": 150.0}
-            }
-        ]
+        tracker.data["signal_history"] = [{"symbol": "AAPL", "date": recent_date, "data": {"price": 150.0}}]
 
-        with patch('src.data_source_yfinance.daily_ohlc') as mock_ohlc:
+        with patch("src.data_source_yfinance.daily_ohlc") as mock_ohlc:
             tracker.update_signal_performance("AAPL", days_after=5)
             mock_ohlc.assert_not_called()
 
@@ -376,16 +356,10 @@ class TestUpdateSignalPerformance:
         tracker = SignalTracker(data_file=str(data_file))
 
         old_date = (datetime.now() - timedelta(days=10)).isoformat()
-        tracker.data["signal_history"] = [
-            {
-                "symbol": "AAPL",
-                "date": old_date,
-                "data": {"price": 100.0}
-            }
-        ]
+        tracker.data["signal_history"] = [{"symbol": "AAPL", "date": old_date, "data": {"price": 100.0}}]
 
         # Mock daily_ohlc to verify it's called
-        with patch('src.data_source_yfinance.daily_ohlc') as mock_ohlc:
+        with patch("src.data_source_yfinance.daily_ohlc") as mock_ohlc:
             mock_ohlc.return_value = None  # Simulate no data
             tracker.update_signal_performance("AAPL", days_after=5)
             # Should have tried to fetch data
@@ -397,15 +371,9 @@ class TestUpdateSignalPerformance:
         tracker = SignalTracker(data_file=str(data_file))
 
         old_date = (datetime.now() - timedelta(days=10)).isoformat()
-        tracker.data["signal_history"] = [
-            {
-                "symbol": "AAPL",
-                "date": old_date,
-                "data": {"price": 100.0}
-            }
-        ]
+        tracker.data["signal_history"] = [{"symbol": "AAPL", "date": old_date, "data": {"price": 100.0}}]
 
-        with patch('src.data_source_yfinance.daily_ohlc', return_value=None):
+        with patch("src.data_source_yfinance.daily_ohlc", return_value=None):
             # Should not raise
             tracker.update_signal_performance("AAPL", days_after=5)
 
@@ -441,12 +409,12 @@ class TestEdgeCases:
             {
                 "symbol": "AAPL",
                 "date": old_date,
-                "data": {"price": 0}  # Zero price
+                "data": {"price": 0},  # Zero price
             }
         ]
 
-        with patch('src.data_source_yfinance.daily_ohlc') as mock_ohlc:
-            mock_ohlc.return_value = pd.DataFrame({'Close': [100.0]})
+        with patch("src.data_source_yfinance.daily_ohlc") as mock_ohlc:
+            mock_ohlc.return_value = pd.DataFrame({"Close": [100.0]})
             tracker.update_signal_performance("AAPL", days_after=5)
             # Should not update performance because price is 0
             assert "performance" not in tracker.data["signal_history"][0]
@@ -502,14 +470,14 @@ class TestGetAllStatsAlias:
                 "symbol": "AAPL",
                 "date": "2024-12-10T10:00:00",
                 "signal_data": {"price": 150.0},
-                "performance": {"return_pct": 5.2, "days_after": 5, "price_at_signal": 150.0}
+                "performance": {"return_pct": 5.2, "days_after": 5, "price_at_signal": 150.0},
             },
             {
                 "symbol": "GOOGL",
                 "date": "2024-12-10T10:00:00",
                 "signal_data": {"price": 2800.0},
-                "performance": {"return_pct": -2.1, "days_after": 5, "price_at_signal": 2800.0}
-            }
+                "performance": {"return_pct": -2.1, "days_after": 5, "price_at_signal": 2800.0},
+            },
         ]
 
         stats = tracker.get_all_stats()
@@ -545,22 +513,19 @@ class TestSignalPerformanceTimestampComparison:
 
         # Add a signal from 10 days ago
         signal_date = datetime.now() - timedelta(days=10)
-        tracker.data["signal_history"] = [{
-            "symbol": "TEST",
-            "date": signal_date.isoformat(),
-            "data": {"price": 100.0}
-        }]
+        tracker.data["signal_history"] = [{"symbol": "TEST", "date": signal_date.isoformat(), "data": {"price": 100.0}}]
 
         # Mock daily_ohlc to return DataFrame with DatetimeIndex
-        mock_df = pd.DataFrame({
-            "Open": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0],
-            "High": [101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0],
-            "Low": [99.0, 100.0, 101.0, 102.0, 103.0, 104.0, 105.0],
-            "Close": [100.5, 101.5, 102.5, 103.5, 104.5, 105.5, 106.5],
-            "Volume": [1000000] * 7
-        }, index=pd.DatetimeIndex([
-            signal_date + timedelta(days=i) for i in range(7)
-        ]))
+        mock_df = pd.DataFrame(
+            {
+                "Open": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0],
+                "High": [101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0],
+                "Low": [99.0, 100.0, 101.0, 102.0, 103.0, 104.0, 105.0],
+                "Close": [100.5, 101.5, 102.5, 103.5, 104.5, 105.5, 106.5],
+                "Volume": [1000000] * 7,
+            },
+            index=pd.DatetimeIndex([signal_date + timedelta(days=i) for i in range(7)]),
+        )
 
         with patch("src.data_source_yfinance.daily_ohlc", return_value=mock_df):
             # This should NOT raise: '>=' not supported between 'numpy.ndarray' and 'Timestamp'
@@ -580,24 +545,21 @@ class TestSignalPerformanceTimestampComparison:
         tracker = SignalTracker(data_file=str(data_file))
 
         signal_date = datetime.now() - timedelta(days=10)
-        tracker.data["signal_history"] = [{
-            "symbol": "TEST",
-            "date": signal_date.isoformat(),
-            "data": {"price": 100.0}
-        }]
+        tracker.data["signal_history"] = [{"symbol": "TEST", "date": signal_date.isoformat(), "data": {"price": 100.0}}]
 
         # Create DataFrame with numpy.datetime64 index (common from yfinance)
-        dates = np.array([
-            signal_date + timedelta(days=i) for i in range(7)
-        ], dtype="datetime64[ns]")
+        dates = np.array([signal_date + timedelta(days=i) for i in range(7)], dtype="datetime64[ns]")
 
-        mock_df = pd.DataFrame({
-            "Open": [100.0] * 7,
-            "High": [101.0] * 7,
-            "Low": [99.0] * 7,
-            "Close": [100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0],
-            "Volume": [1000000] * 7
-        }, index=dates)
+        mock_df = pd.DataFrame(
+            {
+                "Open": [100.0] * 7,
+                "High": [101.0] * 7,
+                "Low": [99.0] * 7,
+                "Close": [100.0, 102.0, 104.0, 106.0, 108.0, 110.0, 112.0],
+                "Volume": [1000000] * 7,
+            },
+            index=dates,
+        )
 
         with patch("src.data_source_yfinance.daily_ohlc", return_value=mock_df):
             # Should not raise TypeError
@@ -611,27 +573,21 @@ class TestSignalPerformanceTimestampComparison:
         tracker = SignalTracker(data_file=str(data_file))
 
         signal_date = datetime.now() - timedelta(days=10)
-        tracker.data["signal_history"] = [{
-            "symbol": "TEST",
-            "date": signal_date.isoformat(),
-            "data": {"price": 100.0}
-        }]
+        tracker.data["signal_history"] = [{"symbol": "TEST", "date": signal_date.isoformat(), "data": {"price": 100.0}}]
 
         # Create timezone-aware index (like real yfinance data)
-        dates = pd.date_range(
-            start=signal_date,
-            periods=7,
-            freq="D",
-            tz="America/New_York"
-        )
+        dates = pd.date_range(start=signal_date, periods=7, freq="D", tz="America/New_York")
 
-        mock_df = pd.DataFrame({
-            "Open": [100.0] * 7,
-            "High": [101.0] * 7,
-            "Low": [99.0] * 7,
-            "Close": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0],
-            "Volume": [1000000] * 7
-        }, index=dates)
+        mock_df = pd.DataFrame(
+            {
+                "Open": [100.0] * 7,
+                "High": [101.0] * 7,
+                "Low": [99.0] * 7,
+                "Close": [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0],
+                "Volume": [1000000] * 7,
+            },
+            index=dates,
+        )
 
         with patch("src.data_source_yfinance.daily_ohlc", return_value=mock_df):
             # Should handle timezone conversion gracefully

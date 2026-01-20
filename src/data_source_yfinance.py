@@ -2,6 +2,7 @@
 Yahoo Finance data source using yfinance library
 Free, unlimited, no API key required!
 """
+
 from datetime import datetime, timedelta
 
 import pandas as pd
@@ -35,7 +36,7 @@ def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame | None:
 
         # Fetch data
         ticker = yf.Ticker(symbol)
-        df = ticker.history(start=start_date, end=end_date, interval='1d')
+        df = ticker.history(start=start_date, end=end_date, interval="1d")
 
         if df.empty:
             logger.warning("yfinance.no_data", symbol=symbol)
@@ -43,7 +44,7 @@ def daily_ohlc(symbol: str, days: int = 100) -> pd.DataFrame | None:
 
         # Clean and prepare data
         df = df.reset_index()
-        df = df[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
+        df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
         df = df.dropna()
 
         # Keep only requested number of days
@@ -85,7 +86,7 @@ def weekly_ohlc(symbol: str, weeks: int = 52) -> pd.DataFrame | None:
 
         # Fetch data
         ticker = yf.Ticker(symbol)
-        df = ticker.history(start=start_date, end=end_date, interval='1wk')
+        df = ticker.history(start=start_date, end=end_date, interval="1wk")
 
         if df.empty:
             logger.warning("yfinance.no_weekly_data", symbol=symbol)
@@ -93,7 +94,7 @@ def weekly_ohlc(symbol: str, weeks: int = 52) -> pd.DataFrame | None:
 
         # Clean and prepare data
         df = df.reset_index()
-        df = df[['Date', 'Open', 'High', 'Low', 'Close', 'Volume']]
+        df = df[["Date", "Open", "High", "Low", "Close", "Volume"]]
         df = df.dropna()
 
         # Keep only requested number of weeks

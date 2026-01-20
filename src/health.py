@@ -2,6 +2,7 @@
 Health check module for telegram-screener.
 Provides file-based health status for monitoring and systemd.
 """
+
 import json
 from datetime import datetime
 from pathlib import Path
@@ -35,14 +36,14 @@ class HealthCheck:
             "last_scan": None,
             "scan_count": 0,
             "error_count": 0,
-            "version": "1.0.0"
+            "version": "1.0.0",
         }
         self._write()
 
     def _write(self):
         """Write health data to file atomically."""
         try:
-            temp_file = self.health_file.with_suffix('.tmp')
+            temp_file = self.health_file.with_suffix(".tmp")
             temp_file.write_text(json.dumps(self._data, indent=2))
             temp_file.rename(self.health_file)
         except Exception as e:
@@ -68,14 +69,13 @@ class HealthCheck:
             "completed_at": datetime.now().isoformat(),
             "symbols_scanned": symbols_scanned,
             "signals_found": signals_found,
-            "duration_seconds": round(duration_seconds, 2)
+            "duration_seconds": round(duration_seconds, 2),
         }
         self._data["last_heartbeat"] = datetime.now().isoformat()
         self._write()
-        logger.info("health.scan_completed",
-                   symbols=symbols_scanned,
-                   signals=signals_found,
-                   duration=round(duration_seconds, 2))
+        logger.info(
+            "health.scan_completed", symbols=symbols_scanned, signals=signals_found, duration=round(duration_seconds, 2)
+        )
 
     def scan_failed(self, error: str):
         """Mark scan as failed."""
@@ -83,7 +83,7 @@ class HealthCheck:
         self._data["error_count"] = self._data.get("error_count", 0) + 1
         self._data["last_error"] = {
             "at": datetime.now().isoformat(),
-            "message": error[:200]  # Truncate long errors
+            "message": error[:200],  # Truncate long errors
         }
         self._data["last_heartbeat"] = datetime.now().isoformat()
         self._write()

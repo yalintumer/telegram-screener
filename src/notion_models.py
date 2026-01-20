@@ -3,6 +3,7 @@ Notion data models and type definitions.
 
 This module contains all dataclasses and type hints used by the Notion client.
 """
+
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from typing import Any
@@ -47,9 +48,7 @@ class SignalData:
     close_price: float | None = None
     volume: int | None = None
 
-    def to_notion_properties(
-        self, title_property: str, schema: dict[str, Any]
-    ) -> dict[str, Any]:
+    def to_notion_properties(self, title_property: str, schema: dict[str, Any]) -> dict[str, Any]:
         """
         Convert to Notion API properties format.
 
@@ -60,9 +59,7 @@ class SignalData:
         Returns:
             Dictionary of Notion property values
         """
-        properties: dict[str, Any] = {
-            title_property: {"title": [{"text": {"content": self.symbol}}]}
-        }
+        properties: dict[str, Any] = {title_property: {"title": [{"text": {"content": self.symbol}}]}}
 
         # Map our fields to potential Notion property names
         field_mappings = {

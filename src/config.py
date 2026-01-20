@@ -14,11 +14,11 @@ class TelegramConfig(BaseModel):
     bot_token: str = Field(..., min_length=10, description="Telegram bot token")
     chat_id: str = Field(..., min_length=1, description="Telegram chat ID")
 
-    @field_validator('bot_token', 'chat_id')
+    @field_validator("bot_token", "chat_id")
     @classmethod
     def not_placeholder(cls, v: str) -> str:
-        if v.startswith('YOUR_'):
-            raise ValueError('Replace placeholder values in config')
+        if v.startswith("YOUR_"):
+            raise ValueError("Replace placeholder values in config")
         return v
 
 
@@ -28,7 +28,7 @@ class APIConfig(BaseModel):
     alpha_vantage_key: str = Field(default="", description="Alpha Vantage API key for precise indicators")
     rate_limit_per_minute: int = Field(default=5, ge=1, le=60)
 
-    @field_validator('provider')
+    @field_validator("provider")
     @classmethod
     def validate_provider(cls, v: str) -> str:
         """Only yfinance is supported"""
@@ -45,13 +45,13 @@ class ScreenConfig(BaseModel):
     region: list[int] = Field(..., min_length=4, max_length=4)
     app_name: str | None = Field(default=None, description="Application name to activate before capture")
 
-    @field_validator('region')
+    @field_validator("region")
     @classmethod
     def validate_region(cls, v: list[int]) -> list[int]:
         if any(x < 0 for x in v[:2]):
-            raise ValueError('Left/top coordinates cannot be negative')
+            raise ValueError("Left/top coordinates cannot be negative")
         if v[2] <= 0 or v[3] <= 0:
-            raise ValueError('Width and height must be positive')
+            raise ValueError("Width and height must be positive")
         return v
 
 
@@ -63,16 +63,17 @@ class TesseractConfig(BaseModel):
 
 class NotionConfig(BaseModel):
     """Notion API configuration - only signals_database_id and buy_database_id are required"""
+
     api_token: str = Field(..., description="Notion integration token")
     database_id: str | None = Field(default=None, description="DEPRECATED: Old watchlist database ID (no longer used)")
     signals_database_id: str = Field(..., description="Database ID for first-stage signals")
     buy_database_id: str = Field(..., description="Database ID for confirmed buy signals")
 
-    @field_validator('api_token', 'signals_database_id', 'buy_database_id')
+    @field_validator("api_token", "signals_database_id", "buy_database_id")
     @classmethod
     def not_placeholder(cls, v: str) -> str:
-        if v and v.startswith('YOUR_'):
-            raise ValueError('Replace placeholder values in config')
+        if v and v.startswith("YOUR_"):
+            raise ValueError("Replace placeholder values in config")
         return v
 
 

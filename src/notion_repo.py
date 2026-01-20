@@ -6,6 +6,7 @@ This module handles all business logic for interacting with Notion databases:
 - Signals operations (get, add, delete, cleanup)
 - Buy database operations (get, add, delete)
 """
+
 from datetime import date, datetime, timedelta
 from typing import Any
 
@@ -115,9 +116,7 @@ class NotionRepository:
 
             payload: dict[str, Any] = {
                 "parent": {"database_id": self.database_id},
-                "properties": {
-                    title_property: {"title": [{"text": {"content": symbol}}]}
-                },
+                "properties": {title_property: {"title": [{"text": {"content": symbol}}]}},
             }
 
             if date_property:
@@ -156,9 +155,7 @@ class NotionRepository:
             return result
 
         except Exception as e:
-            logger.error(
-                "notion.delete_from_watchlist_failed", symbol=symbol, error=str(e)
-            )
+            logger.error("notion.delete_from_watchlist_failed", symbol=symbol, error=str(e))
             return False
 
     def update_watchlist_date(self, symbol: str, page_id: str | None = None) -> bool:
@@ -205,9 +202,7 @@ class NotionRepository:
             return [], {}
 
         try:
-            response = self.http.post(
-                f"/databases/{self.signals_database_id}/query", json={}
-            )
+            response = self.http.post(f"/databases/{self.signals_database_id}/query", json={})
             data = response.json()
             results = data.get("results", [])
 
@@ -263,16 +258,12 @@ class NotionRepository:
         try:
             properties = self.http.get_database_schema(self.signals_database_id)
             if not properties:
-                logger.error(
-                    "notion.schema_fetch_failed", database_id=self.signals_database_id
-                )
+                logger.error("notion.schema_fetch_failed", database_id=self.signals_database_id)
                 return False
 
             title_property = self.http.find_title_property(properties)
             if not title_property:
-                logger.error(
-                    "notion.no_title_property", database_id=self.signals_database_id
-                )
+                logger.error("notion.no_title_property", database_id=self.signals_database_id)
                 return False
 
             notion_properties = signal.to_notion_properties(title_property, properties)
@@ -287,9 +278,7 @@ class NotionRepository:
             return True
 
         except Exception as e:
-            logger.error(
-                "notion.add_signal_failed", symbol=signal.symbol, error=str(e)
-            )
+            logger.error("notion.add_signal_failed", symbol=signal.symbol, error=str(e))
             return False
 
     def delete_from_signals(self, symbol: str) -> bool:
@@ -320,9 +309,7 @@ class NotionRepository:
             return result
 
         except Exception as e:
-            logger.error(
-                "notion.delete_from_signals_failed", symbol=symbol, error=str(e)
-            )
+            logger.error("notion.delete_from_signals_failed", symbol=symbol, error=str(e))
             return False
 
     def symbol_exists_in_signals(self, symbol: str) -> bool:
@@ -355,9 +342,7 @@ class NotionRepository:
             return 0
 
         try:
-            response = self.http.post(
-                f"/databases/{self.signals_database_id}/query", json={}
-            )
+            response = self.http.post(f"/databases/{self.signals_database_id}/query", json={})
             data = response.json()
             results = data.get("results", [])
 
@@ -397,9 +382,7 @@ class NotionRepository:
             removed = 0
             for symbol, page_id in duplicate_pages:
                 if self.delete_page(page_id):
-                    logger.info(
-                        "notion.duplicate_removed", symbol=symbol, page_id=page_id
-                    )
+                    logger.info("notion.duplicate_removed", symbol=symbol, page_id=page_id)
                     removed += 1
 
             logger.info(
@@ -428,9 +411,7 @@ class NotionRepository:
             return 0
 
         try:
-            response = self.http.post(
-                f"/databases/{self.signals_database_id}/query", json={}
-            )
+            response = self.http.post(f"/databases/{self.signals_database_id}/query", json={})
             data = response.json()
             results = data.get("results", [])
 
@@ -457,9 +438,7 @@ class NotionRepository:
                     date_data = props.get(date_property, {}).get("date")
                     if date_data and date_data.get("start"):
                         try:
-                            signal_date = datetime.fromisoformat(
-                                date_data["start"].replace("Z", "+00:00")
-                            )
+                            signal_date = datetime.fromisoformat(date_data["start"].replace("Z", "+00:00"))
                             if signal_date.tzinfo:
                                 signal_date = signal_date.replace(tzinfo=None)
                         except (ValueError, TypeError):
@@ -475,9 +454,7 @@ class NotionRepository:
                             if prop_data.get("type") == "title":
                                 title_content = prop_data.get("title", [])
                                 if title_content:
-                                    symbol = title_content[0].get("text", {}).get(
-                                        "content", "unknown"
-                                    )
+                                    symbol = title_content[0].get("text", {}).get("content", "unknown")
                                     logger.info(
                                         "notion.old_signal_removed",
                                         symbol=symbol,
@@ -522,23 +499,17 @@ class NotionRepository:
         try:
             properties = self.http.get_database_schema(self.buy_database_id)
             if not properties:
-                logger.error(
-                    "notion.schema_fetch_failed", database_id=self.buy_database_id
-                )
+                logger.error("notion.schema_fetch_failed", database_id=self.buy_database_id)
                 return False
 
             title_property = self.http.find_title_property(properties)
             if not title_property:
-                logger.error(
-                    "notion.no_title_property", database_id=self.buy_database_id
-                )
+                logger.error("notion.no_title_property", database_id=self.buy_database_id)
                 return False
 
             payload: dict[str, Any] = {
                 "parent": {"database_id": self.buy_database_id},
-                "properties": {
-                    title_property: {"title": [{"text": {"content": symbol}}]}
-                },
+                "properties": {title_property: {"title": [{"text": {"content": symbol}}]}},
             }
 
             # Add optional properties
@@ -641,9 +612,7 @@ class NotionRepository:
             return 0
 
         try:
-            response = self.http.post(
-                f"/databases/{self.buy_database_id}/query", json={}
-            )
+            response = self.http.post(f"/databases/{self.buy_database_id}/query", json={})
             data = response.json()
             results = data.get("results", [])
 
@@ -670,9 +639,7 @@ class NotionRepository:
                     date_data = props.get(date_property, {}).get("date")
                     if date_data and date_data.get("start"):
                         try:
-                            buy_date = datetime.fromisoformat(
-                                date_data["start"].replace("Z", "+00:00")
-                            )
+                            buy_date = datetime.fromisoformat(date_data["start"].replace("Z", "+00:00"))
                             if buy_date.tzinfo:
                                 buy_date = buy_date.replace(tzinfo=None)
                         except (ValueError, TypeError):
@@ -688,9 +655,7 @@ class NotionRepository:
                             if prop_data.get("type") == "title":
                                 title_content = prop_data.get("title", [])
                                 if title_content:
-                                    symbol = title_content[0].get("text", {}).get(
-                                        "content", "unknown"
-                                    )
+                                    symbol = title_content[0].get("text", {}).get("content", "unknown")
                                     logger.info(
                                         "notion.old_buy_removed",
                                         symbol=symbol,
@@ -808,9 +773,7 @@ class NotionRepository:
             return symbol_to_page
 
         except Exception as e:
-            logger.error(
-                "notion.get_symbol_page_map_failed", database_id=database_id, error=str(e)
-            )
+            logger.error("notion.get_symbol_page_map_failed", database_id=database_id, error=str(e))
             return symbol_to_page
 
     def _get_symbols_from_database(self, database_id: str) -> list[str]:
@@ -856,7 +819,5 @@ class NotionRepository:
             return symbols
 
         except Exception as e:
-            logger.error(
-                "notion.fetch_symbols_failed", database_id=database_id, error=str(e)
-            )
+            logger.error("notion.fetch_symbols_failed", database_id=database_id, error=str(e))
             return []

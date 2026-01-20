@@ -45,10 +45,10 @@ def mfi(df: pd.DataFrame, period: int = MFI_PERIOD) -> pd.Series:
         Series with MFI values (0-100)
     """
     # Typical Price = (High + Low + Close) / 3
-    typical_price = (df['High'] + df['Low'] + df['Close']) / 3
+    typical_price = (df["High"] + df["Low"] + df["Close"]) / 3
 
     # Money Flow = Typical Price * Volume
-    money_flow = typical_price * df['Volume']
+    money_flow = typical_price * df["Volume"]
 
     # Vectorized Positive/Negative Money Flow (no iloc loop)
     price_diff = typical_price.diff()
@@ -131,7 +131,7 @@ def wavetrend(df: pd.DataFrame, channel_length: int = 10, average_length: int = 
         Oversold: < -60 (extreme), < -53 (warning)
     """
     # ap = hlc3 (typical price)
-    ap = (df['High'] + df['Low'] + df['Close']) / 3
+    ap = (df["High"] + df["Low"] + df["Close"]) / 3
 
     # esa = EMA of ap with channel_length
     esa = ap.ewm(span=channel_length, adjust=False).mean()
@@ -154,8 +154,9 @@ def wavetrend(df: pd.DataFrame, channel_length: int = 10, average_length: int = 
     return pd.DataFrame({"wt1": wt1, "wt2": wt2})
 
 
-def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS,
-                  oversold_level: int = WAVETREND_OVERSOLD) -> bool:
+def wavetrend_buy(
+    wt_df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS, oversold_level: int = WAVETREND_OVERSOLD
+) -> bool:
     """
     Detect WaveTrend buy signal (bullish cross in oversold zone)
 
@@ -194,8 +195,12 @@ def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS
         cross_up = prev.wt1 <= prev.wt2 and curr.wt1 > curr.wt2
 
         # Oversold: Either wave below oversold level
-        oversold = (curr.wt1 < oversold_level or curr.wt2 < oversold_level or
-                   prev.wt1 < oversold_level or prev.wt2 < oversold_level)
+        oversold = (
+            curr.wt1 < oversold_level
+            or curr.wt2 < oversold_level
+            or prev.wt1 < oversold_level
+            or prev.wt2 < oversold_level
+        )
 
         if cross_up and oversold:
             return True
@@ -203,8 +208,9 @@ def wavetrend_buy(wt_df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS
     return False
 
 
-def stochastic_rsi(close: pd.Series, rsi_period=STOCH_RSI_PERIOD, stoch_period=STOCH_PERIOD,
-                   k=STOCH_K_SMOOTH, d=STOCH_D_SMOOTH) -> pd.DataFrame:
+def stochastic_rsi(
+    close: pd.Series, rsi_period=STOCH_RSI_PERIOD, stoch_period=STOCH_PERIOD, k=STOCH_K_SMOOTH, d=STOCH_D_SMOOTH
+) -> pd.DataFrame:
     r = rsi(close, rsi_period)
     r_min = r.rolling(stoch_period).min()
     r_max = r.rolling(stoch_period).max()
@@ -255,8 +261,9 @@ def stoch_rsi_buy(df: pd.DataFrame, lookback_days: int = SIGNAL_LOOKBACK_DAYS) -
         cross_up = prev.k <= prev.d and curr.k > curr.d
 
         # Oversold: Either line is below 20 during the cross
-        oversold = (curr.k < STOCH_OVERSOLD or curr.d < STOCH_OVERSOLD or
-                   prev.k < STOCH_OVERSOLD or prev.d < STOCH_OVERSOLD)
+        oversold = (
+            curr.k < STOCH_OVERSOLD or curr.d < STOCH_OVERSOLD or prev.k < STOCH_OVERSOLD or prev.d < STOCH_OVERSOLD
+        )
 
         # Valid signal requires: cross + oversold (simplified)
         valid_cross = cross_up and oversold
@@ -300,8 +307,4 @@ def bollinger_bands(data: pd.Series, period: int = 20, std_dev: float = 2.0) -> 
     upper = middle + (std * std_dev)
     lower = middle - (std * std_dev)
 
-    return {
-        'upper': upper,
-        'middle': middle,
-        'lower': lower
-    }
+    return {"upper": upper, "middle": middle, "lower": lower}

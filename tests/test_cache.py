@@ -1,4 +1,5 @@
 """Tests for cache module."""
+
 import json
 from datetime import datetime, timedelta
 
@@ -20,12 +21,7 @@ class TestMarketCapCacheInit:
     def test_loads_existing_cache_from_file(self, tmp_path):
         """Should load existing cache data from file."""
         cache_file = tmp_path / "cache.json"
-        existing_data = {
-            "AAPL": {
-                "market_cap": 3000000000000,
-                "timestamp": datetime.now().isoformat()
-            }
-        }
+        existing_data = {"AAPL": {"market_cap": 3000000000000, "timestamp": datetime.now().isoformat()}}
         cache_file.write_text(json.dumps(existing_data))
 
         cache = MarketCapCache(cache_file=str(cache_file))
@@ -68,10 +64,7 @@ class TestCacheGet:
         cache = MarketCapCache(cache_file=str(cache_file))
 
         # Set cache directly
-        cache.cache["AAPL"] = {
-            "market_cap": 3000000000000,
-            "timestamp": datetime.now().isoformat()
-        }
+        cache.cache["AAPL"] = {"market_cap": 3000000000000, "timestamp": datetime.now().isoformat()}
 
         result = cache.get("AAPL")
 
@@ -84,10 +77,7 @@ class TestCacheGet:
 
         # Set expired cache (25 hours ago)
         old_time = (datetime.now() - timedelta(hours=25)).isoformat()
-        cache.cache["AAPL"] = {
-            "market_cap": 3000000000000,
-            "timestamp": old_time
-        }
+        cache.cache["AAPL"] = {"market_cap": 3000000000000, "timestamp": old_time}
 
         result = cache.get("AAPL")
 
@@ -100,10 +90,7 @@ class TestCacheGet:
         cache = MarketCapCache(cache_file=str(cache_file), ttl_hours=24)
 
         old_time = (datetime.now() - timedelta(hours=25)).isoformat()
-        cache.cache["AAPL"] = {
-            "market_cap": 3000000000000,
-            "timestamp": old_time
-        }
+        cache.cache["AAPL"] = {"market_cap": 3000000000000, "timestamp": old_time}
         cache._save_cache()
 
         cache.get("AAPL")
@@ -181,7 +168,7 @@ class TestClearExpired:
         cache.cache = {
             "AAPL": {"market_cap": 3000000000000, "timestamp": old_time},
             "GOOGL": {"market_cap": 2000000000000, "timestamp": old_time},
-            "MSFT": {"market_cap": 2500000000000, "timestamp": recent_time}
+            "MSFT": {"market_cap": 2500000000000, "timestamp": recent_time},
         }
 
         cache.clear_expired()
@@ -196,9 +183,7 @@ class TestClearExpired:
         cache = MarketCapCache(cache_file=str(cache_file), ttl_hours=24)
 
         old_time = (datetime.now() - timedelta(hours=25)).isoformat()
-        cache.cache = {
-            "AAPL": {"market_cap": 3000000000000, "timestamp": old_time}
-        }
+        cache.cache = {"AAPL": {"market_cap": 3000000000000, "timestamp": old_time}}
 
         cache.clear_expired()
 
@@ -211,9 +196,7 @@ class TestClearExpired:
         cache = MarketCapCache(cache_file=str(cache_file), ttl_hours=24)
 
         recent_time = datetime.now().isoformat()
-        cache.cache = {
-            "AAPL": {"market_cap": 3000000000000, "timestamp": recent_time}
-        }
+        cache.cache = {"AAPL": {"market_cap": 3000000000000, "timestamp": recent_time}}
         cache._save_cache()
 
         cache.clear_expired()
@@ -247,7 +230,7 @@ class TestGetStats:
 
         cache.cache = {
             "AAPL": {"market_cap": 3000000000000, "timestamp": old_time},
-            "MSFT": {"market_cap": 2500000000000, "timestamp": recent_time}
+            "MSFT": {"market_cap": 2500000000000, "timestamp": recent_time},
         }
 
         stats = cache.get_stats()
@@ -266,7 +249,7 @@ class TestGetStats:
 
         cache.cache = {
             "AAPL": {"market_cap": 3000000000000, "timestamp": time_10h},
-            "MSFT": {"market_cap": 2500000000000, "timestamp": time_2h}
+            "MSFT": {"market_cap": 2500000000000, "timestamp": time_2h},
         }
 
         stats = cache.get_stats()

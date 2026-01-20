@@ -12,8 +12,7 @@ class TVScreenerError(Exception):
         original_error: Original exception if wrapped
     """
 
-    def __init__(self, message: str, context: dict[str, Any] | None = None,
-                 original_error: Exception | None = None):
+    def __init__(self, message: str, context: dict[str, Any] | None = None, original_error: Exception | None = None):
         self.message = message
         self.context = context or {}
         self.original_error = original_error
@@ -38,6 +37,7 @@ class OCRError(TVScreenerError):
     - Invalid image format or corrupted file
     - Poor image quality (resolution, contrast)
     """
+
     pass
 
 
@@ -50,6 +50,7 @@ class DataSourceError(TVScreenerError):
     - Invalid symbol or no data available
     - API key invalid or expired (for non-yfinance providers)
     """
+
     pass
 
 
@@ -62,6 +63,7 @@ class TelegramError(TVScreenerError):
     - Rate limit exceeded (Telegram has strict limits)
     - Message too long (>4096 chars for Telegram)
     """
+
     pass
 
 
@@ -74,6 +76,7 @@ class ConfigError(TVScreenerError):
     - Invalid format (e.g., region coordinates)
     - Environment variables not set
     """
+
     pass
 
 
@@ -85,6 +88,7 @@ class ValidationError(TVScreenerError):
     - Out of range parameters
     - Invalid file paths
     """
+
     pass
 
 
@@ -96,5 +100,5 @@ class WatchlistError(TVScreenerError):
     - Corrupted watchlist.json
     - Invalid date formats
     """
-    pass
 
+    pass
