@@ -187,6 +187,10 @@ def run_market_scan(cfg: Config) -> dict | None:
     # Record analytics
     analytics = Analytics()
     analytics.record_market_scan(filter_passed_count, added_count, 0)
+    analytics.record_stage1_scan(
+        checked=len(sp500_symbols) - skipped_count,
+        passed=signal_found_count
+    )
 
     # Backup Notion databases
     print("\n💾 Backing up Notion databases...")
