@@ -276,6 +276,12 @@ def run_wavetrend_scan(cfg: Config) -> dict | None:
     if removed_count > 0:
         print(f"   Removed {removed_count} old/stale signals")
 
+    # Cleanup old buys
+    print("🧹 Cleaning up old buys...")
+    removed_buys = notion.cleanup_old_buys(max_age_days=15)
+    if removed_buys > 0:
+        print(f"   Removed {removed_buys} old buy entries")
+
     # Show daily stats
     daily_stats = signal_tracker.get_daily_stats()
     logger.info("signal_tracker.daily_stats", **daily_stats)

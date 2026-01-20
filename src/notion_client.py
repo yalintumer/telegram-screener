@@ -170,6 +170,10 @@ class NotionClient:
         """Check if a symbol exists in buy database."""
         return self._repo.symbol_exists_in_buy(symbol)
 
+    def cleanup_old_buys(self, max_age_days: int = 15) -> int:
+        """Remove old entries from buy database."""
+        return self._repo.cleanup_old_buys(max_age_days)
+
     # ==================== Common Operations ====================
 
     def get_all_symbols(self) -> set:

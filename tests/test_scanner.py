@@ -137,6 +137,7 @@ class TestRunWavetrendScan:
              patch('src.scanner.SignalTracker') as mock_tracker:
 
             mock_notion.return_value.cleanup_old_signals.return_value = 0
+            mock_notion.return_value.cleanup_old_buys.return_value = 0
             mock_notion.return_value.get_signals.return_value = ([], {})
             mock_tracker.return_value.get_daily_stats.return_value = {
                 'alerts_sent': 0,
@@ -158,6 +159,7 @@ class TestRunWavetrendScan:
              patch('src.scanner.Analytics'):
 
             mock_notion.return_value.cleanup_old_signals.return_value = 0
+            mock_notion.return_value.cleanup_old_buys.return_value = 0
             mock_notion.return_value.get_signals.return_value = (['AAPL', 'MSFT'], {'AAPL': 'page1', 'MSFT': 'page2'})
             mock_notion.return_value._get_symbols_from_database.return_value = ['AAPL']  # Already in buy
             mock_tracker.return_value.get_daily_stats.return_value = {

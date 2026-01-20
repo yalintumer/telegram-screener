@@ -626,6 +626,85 @@ class NotionRepository:
         except Exception:
             return False
 
+    def cleanup_old_buys(self, max_age_days: int = 15) -> int:
+        """
+        Remove old entries from buy database.
+
+        Args:
+            max_age_days: Maximum age in days before buy entry is removed
+
+        Returns:
+            Number of buy entries removed
+        """
+        if not self.buy_database_id:
+            logger.warning("notion.cleanup_no_buy_db")
+            return 0
+
+        try:
+            response = self.http.post(
+                f"/databases/{self.buy_database_id}/query", json={}
+            )
+            data = response.json()
+            results = data.get("results", [])
+
+            if not results:
+                return 0
+
+            # Find date property
+            first_page_props = results[0].get("properties", {})
+            date_property = None
+            for prop_name, prop_data in first_page_props.items():
+                if prop_data.get("type") == "date":
+                    date_property = prop_name
+                    break
+
+            removed_count = 0
+            cutoff_date = datetime.now() - timedelta(days=max_age_days)
+
+            for page in results:
+                page_id = page["id"]
+                props = page.get("properties", {})
+
+                buy_date = None
+                if date_property:
+                    date_data = props.get(date_property, {}).get("date")
+                    if date_data and date_data.get("start"):
+                        try:
+                            buy_date = datetime.fromisoformat(
+                                date_data["start"].replace("Z", "+00:00")
+                            )
+                            if buy_date.tzinfo:
+                                buy_date = buy_date.replace(tzinfo=None)
+                        except (ValueError, TypeError):
+                            pass
+
+                should_remove = buy_date is None or buy_date < cutoff_date
+
+                if should_remove:
+                    if self.delete_page(page_id):
+                        removed_count += 1
+                        # Get symbol for logging
+                        for _prop_name, prop_data in props.items():
+                            if prop_data.get("type") == "title":
+                                title_content = prop_data.get("title", [])
+                                if title_content:
+                                    symbol = title_content[0].get("text", {}).get(
+                                        "content", "unknown"
+                                    )
+                                    logger.info(
+                                        "notion.old_buy_removed",
+                                        symbol=symbol,
+                                        page_id=page_id,
+                                    )
+                                break
+
+            logger.info("notion.buys_cleanup_complete", removed=removed_count)
+            return removed_count
+
+        except Exception as e:
+            logger.error("notion.buy_cleanup_failed", error=str(e))
+            return 0
+
     # ==================== Common Operations ====================
 
     def get_all_symbols(self) -> set[str]:
