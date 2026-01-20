@@ -13,7 +13,9 @@ pydantic>=2.0.0
 # Error tracking
 sentry-sdk>=2.0.0
 
-# Testing (optional)
+# Testing
 pytest>=7.4.0
+pytest-cov>=4.0.0
+responses>=0.25.0
 
 
