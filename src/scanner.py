@@ -188,7 +188,7 @@ def run_market_scan(cfg: Config) -> dict | None:
     analytics = Analytics()
     analytics.record_market_scan(filter_passed_count, added_count, 0)
     analytics.record_stage1_scan(
-        checked=len(sp500_symbols) - skipped_count,
+        checked=filter_passed_count,  # Only those that passed market filter get Stage 1 check
         passed=signal_found_count
     )
 
