@@ -111,7 +111,10 @@ class TestCheckWavetrendSignal:
 
     def test_returns_false_for_no_data(self):
         """Should return False when no data available."""
-        with patch("src.filters.daily_ohlc", return_value=None):
+        with (
+            patch("src.filters.hourly_4h_ohlc", return_value=None),
+            patch("src.filters.daily_ohlc", return_value=None),
+        ):
             result = check_wavetrend_signal("TEST")
 
         assert result is False
@@ -122,14 +125,20 @@ class TestCheckWavetrendSignal:
             {"Open": [100] * 20, "High": [101] * 20, "Low": [99] * 20, "Close": [100] * 20, "Volume": [1000000] * 20}
         )
 
-        with patch("src.filters.daily_ohlc", return_value=short_df):
+        with (
+            patch("src.filters.hourly_4h_ohlc", return_value=short_df),
+            patch("src.filters.daily_ohlc", return_value=short_df),
+        ):
             result = check_wavetrend_signal("TEST")
 
         assert result is False
 
     def test_returns_bool(self):
         """Should always return a boolean."""
-        with patch("src.filters.daily_ohlc", return_value=None):
+        with (
+            patch("src.filters.hourly_4h_ohlc", return_value=None),
+            patch("src.filters.daily_ohlc", return_value=None),
+        ):
             result = check_wavetrend_signal("TEST")
 
         assert isinstance(result, bool)
@@ -141,6 +150,7 @@ class TestCheckWavetrendSignal:
         )
 
         with (
+            patch("src.filters.hourly_4h_ohlc", return_value=mock_df),
             patch("src.filters.daily_ohlc", return_value=mock_df),
             patch("src.filters.weekly_ohlc") as mock_weekly,
             patch("src.filters.wavetrend") as mock_wt,

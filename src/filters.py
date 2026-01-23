@@ -10,7 +10,7 @@ Extracted from main.py for better separation of concerns.
 import yfinance as yf
 
 from .cache import MarketCapCache
-from .data_source_yfinance import daily_ohlc, weekly_ohlc
+from .data_source_yfinance import daily_ohlc, hourly_4h_ohlc, weekly_ohlc
 from .indicators import (
     bollinger_bands,
     mfi,
@@ -216,12 +216,13 @@ def check_wavetrend_signal(symbol: str, use_multi_timeframe: bool = True) -> boo
     Check if symbol has WaveTrend buy signal (Stage 2 confirmation).
 
     Conditions:
-    1. Daily: WaveTrend WT1 crosses above WT2 in oversold zone (< -53)
-    2. Weekly (optional): WaveTrend must NOT be extremely overbought (WT1 < 60)
+    1. 4-Hour: WaveTrend WT1 crosses above WT2 in oversold zone (< -53)
+    2. Daily: WaveTrend must be in oversold territory (WT1 < 0) for confirmation
+    3. Weekly (optional): WaveTrend must NOT be extremely overbought (WT1 < 60)
 
     Args:
         symbol: Stock ticker symbol
-        use_multi_timeframe: If True, confirms daily signal with weekly trend
+        use_multi_timeframe: If True, confirms 4H signal with daily and weekly trend
 
     Returns:
         True if WaveTrend buy signal detected
@@ -233,24 +234,56 @@ def check_wavetrend_signal(symbol: str, use_multi_timeframe: bool = True) -> boo
     try:
         logger.info("checking_wavetrend", symbol=symbol, multi_timeframe=use_multi_timeframe)
 
-        # Get daily price data
-        df_daily = daily_ohlc(symbol)
+        # Get 4-hour price data (primary signal)
+        df_4h = hourly_4h_ohlc(symbol, days=30)
 
-        if df_daily is None or len(df_daily) < 30:
-            logger.warning("insufficient_data", symbol=symbol)
+        if df_4h is None or len(df_4h) < 30:
+            logger.warning("insufficient_4h_data", symbol=symbol)
+            # Fallback to daily if 4H not available
+            df_daily = daily_ohlc(symbol)
+            if df_daily is None or len(df_daily) < 30:
+                logger.warning("insufficient_data", symbol=symbol)
+                return False
+            wt_signal = wavetrend(df_daily, channel_length=10, average_length=21)
+            timeframe_used = "daily"
+        else:
+            # Calculate 4-hour WaveTrend
+            wt_signal = wavetrend(df_4h, channel_length=10, average_length=21)
+            timeframe_used = "4h"
+
+        # Check for WaveTrend buy signal (cross in oversold zone)
+        has_signal = wavetrend_buy(wt_signal, lookback_days=3, oversold_level=-53)
+
+        if not has_signal:
             return False
 
-        # Calculate daily WaveTrend
-        wt_daily = wavetrend(df_daily, channel_length=10, average_length=21)
-
-        # Check for daily WaveTrend buy signal
-        has_daily_signal = wavetrend_buy(wt_daily, lookback_days=3, oversold_level=-53)
-
-        if not has_daily_signal:
-            return False
+        logger.info(
+            "wavetrend_signal_detected",
+            symbol=symbol,
+            timeframe=timeframe_used,
+            wt1=float(wt_signal["wt1"].iloc[-1]),
+            wt2=float(wt_signal["wt2"].iloc[-1]),
+        )
 
         # Multi-timeframe confirmation (optional)
         if use_multi_timeframe:
+            # Daily confirmation - should be oversold or neutral
+            df_daily = daily_ohlc(symbol)
+            if df_daily is not None and len(df_daily) >= 30:
+                wt_daily = wavetrend(df_daily, channel_length=10, average_length=21)
+                daily_wt1 = float(wt_daily["wt1"].iloc[-1])
+
+                # Reject if daily is overbought (WT1 > 30)
+                if daily_wt1 > 30:
+                    logger.info(
+                        "wavetrend_rejected_daily_overbought",
+                        symbol=symbol,
+                        signal_timeframe=timeframe_used,
+                        daily_wt1=daily_wt1,
+                    )
+                    return False
+
+            # Weekly confirmation
             df_weekly = weekly_ohlc(symbol, weeks=52)
 
             if df_weekly is not None and len(df_weekly) >= 14:
@@ -259,27 +292,34 @@ def check_wavetrend_signal(symbol: str, use_multi_timeframe: bool = True) -> boo
 
                 # Reject if weekly is extremely overbought (prevents buying at tops)
                 if weekly_wt1 > 60:
-                    logger.info("wavetrend_rejected_weekly", symbol=symbol, daily_signal=True, weekly_wt1=weekly_wt1)
+                    logger.info(
+                        "wavetrend_rejected_weekly",
+                        symbol=symbol,
+                        signal_timeframe=timeframe_used,
+                        weekly_wt1=weekly_wt1,
+                    )
                     return False
 
                 logger.info(
                     "wavetrend_multi_timeframe_confirmed",
                     symbol=symbol,
-                    daily_wt1=float(wt_daily["wt1"].iloc[-1]),
+                    signal_timeframe=timeframe_used,
+                    signal_wt1=float(wt_signal["wt1"].iloc[-1]),
+                    daily_wt1=daily_wt1 if df_daily is not None else None,
                     weekly_wt1=weekly_wt1,
                 )
             else:
                 logger.warning("weekly_data_unavailable", symbol=symbol)
 
-        if has_daily_signal:
-            logger.info(
-                "wavetrend_signal_found",
-                symbol=symbol,
-                wt1=float(wt_daily["wt1"].iloc[-1]),
-                wt2=float(wt_daily["wt2"].iloc[-1]),
-            )
+        logger.info(
+            "wavetrend_signal_found",
+            symbol=symbol,
+            timeframe=timeframe_used,
+            wt1=float(wt_signal["wt1"].iloc[-1]),
+            wt2=float(wt_signal["wt2"].iloc[-1]),
+        )
 
-        return has_daily_signal
+        return True
 
     except Exception as e:
         logger.error("wavetrend_check_failed", symbol=symbol, error=str(e))
