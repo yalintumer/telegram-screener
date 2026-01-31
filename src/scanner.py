@@ -423,6 +423,10 @@ def run_wavetrend_scan(cfg: Config) -> dict | None:
                 }
                 signal_tracker.record_alert(symbol, signal_data)
 
+                # Record alert in analytics for weekly report
+                analytics = Analytics()
+                analytics.record_alert_sent(symbol, current_price)
+
                 page_id = symbol_to_page.get(symbol)
                 if page_id:
                     notion.delete_page(page_id)
